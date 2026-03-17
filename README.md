@@ -27,6 +27,8 @@ Vision-Language-Action (VLA) models excel in static manipulation but struggle in
 
 ### 🎥 Visual Demos
 
+More visual demos can be found on our [project homepage](https://h-embodvis.github.io/DOMINO/).
+
 <div align="center">
   <img src="static/gif/1.gif" width="32%" />
   <img src="static/gif/2.gif" width="32%" />
