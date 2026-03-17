@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- Primary Meta Tags -->
+  <meta name="title" content="Towards Generalizable Robotic Manipulation in Dynamic Environments">
+  <meta name="description" content="DOMINO: A comprehensive benchmark and PUMA architecture for generalizable robotic manipulation in dynamic environments.">
+  <meta name="keywords" content="Robotic Manipulation, Dynamic Environments, Vision-Language-Action, VLA, DOMINO, PUMA, machine learning, AI">
+  <meta name="author" content="Heng Fang, Shangru Li, Shuhan Wang, Xuanyang Xi, Dingkang Liang, Xiang Bai">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English">
+
+  <!-- Academic/Research Specific -->
+  <meta name="citation_title" content="Towards Generalizable Robotic Manipulation in Dynamic Environments">
+  <meta name="citation_author" content="Fang, Heng">
+  <meta name="citation_author" content="Li, Shangru">
+  <meta name="citation_author" content="Wang, Shuhan">
+  <meta name="citation_author" content="Xi, Xuanyang">
+  <meta name="citation_author" content="Liang, Dingkang">
+  <meta name="citation_author" content="Bai, Xiang">
+  <meta name="citation_publication_date" content="2026">
+  <meta name="citation_conference_title" content="arXiv preprint">
+  <meta name="citation_pdf_url" content="https://arxiv.org/pdf/2603.15620">
+  
+  <!-- Additional SEO -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="msapplication-TileColor" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://ajax.googleapis.com">
+  <link rel="preconnect" href="https://documentcloud.adobe.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+
+  <title>Towards Generalizable Robotic Manipulation in Dynamic Environments | DOMINO</title>
+  
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/svg+xml" href="static/images/icon.svg">
+  <link rel="apple-touch-icon" href="static/images/icon.svg">
+  
+  <!-- Critical CSS - Load synchronously -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+  
+  <!-- Non-critical CSS - Load asynchronously -->
+  <link rel="preload" href="static/css/bulma-carousel.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/bulma-slider.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/fontawesome.all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  
+  <!-- Fallback for browsers that don't support preload -->
+  <noscript>
+    <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  </noscript>
+  
+  <!-- Fonts - Optimized loading -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Defer non-critical JavaScript -->
+  <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script defer src="static/js/bulma-carousel.min.js"></script>
+  <script defer src="static/js/bulma-slider.min.js"></script>
+  <script defer src="static/js/index.js"></script>
+  
+  <!-- Structured Data for Academic Papers -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ScholarlyArticle",
+    "headline": "Towards Generalizable Robotic Manipulation in Dynamic Environments",
+    "description": "DOMINO: A comprehensive benchmark and PUMA architecture for generalizable robotic manipulation in dynamic environments.",
+    "author": [
+      {
+        "@type": "Person",
+        "name": "Heng Fang",
+        "affiliation": {
+          "@type": "Organization",
+          "name": "Huazhong University of Science and Technology"
+        }
+      },
+      {
+        "@type": "Person",
+        "name": "Shangru Li",
+        "affiliation": {
+          "@type": "Organization",
+          "name": "Huazhong University of Science and Technology"
+        }
+      }
+    ],
+    "datePublished": "2026-03-01",
+    "publisher": {
+      "@type": "Organization",
+      "name": "arXiv"
+    },
+    "url": "https://arxiv.org/abs/2603.15620",
+    "image": "static/images/social_preview.png",
+    "keywords": ["Robotic Manipulation", "Dynamic Environments", "Vision-Language-Action", "machine learning", "computer vision"],
+    "abstract": "Vision-Language-Action (VLA) models excel in static manipulation but struggle in dynamic environments with moving targets. This performance gap primarily stems from a scarcity of dynamic manipulation datasets and the reliance of mainstream VLAs on single-frame observations, restricting their spatiotemporal reasoning capabilities. To address this, we introduce DOMINO, a large-scale dataset and benchmark for generalizable dynamic manipulation, featuring 35 tasks with hierarchical complexities, over 110K expert trajectories, and a multi-dimensional evaluation suite. Through comprehensive experiments, we systematically evaluate existing VLAs on dynamic tasks, explore effective training strategies for dynamic awareness, and validate the generalizability of dynamic data. Furthermore, we propose PUMA, a dynamics-aware VLA architecture. By integrating scene-centric historical optical flow and specialized world queries to implicitly forecast object-centric future states, PUMA couples history-aware perception with short-horizon prediction. Results demonstrate that PUMA achieves state-of-the-art performance, yielding a 6.3% absolute improvement in success rate over baselines. Moreover, we show that training on dynamic data fosters robust spatiotemporal representations that transfer to static tasks.",
+    "citation": "@article{fang2026towards, title={Towards Generalizable Robotic Manipulation in Dynamic Environments}, author={Fang, Heng and Li, Shangru and Wang, Shuhan and Xi, Xuanyang and Liang, Dingkang and Bai, Xiang}, journal={arXiv preprint arXiv:2603.15620}, year={2026}}",
+    "isAccessibleForFree": true,
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "mainEntity": {
+      "@type": "WebPage",
+      "@id": "https://arxiv.org/abs/2603.15620"
+    },
+    "about": [
+      {
+        "@type": "Thing",
+        "name": "Robotic Manipulation"
+      },
+      {
+        "@type": "Thing", 
+        "name": "Dynamic Environments"
+      }
+    ]
+  }
+  </script>
+  
+  <!-- Website/Organization Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Huazhong University of Science and Technology",
+    "url": "https://www.hust.edu.cn/",
+    "logo": "static/images/favicon.ico",
+    "sameAs": [
+      "https://github.com/hengfang"
+    ]
+  }
+  </script>
+</head>
+<body>
+
+
+  <!-- Scroll to Top Button -->
+  <button class="scroll-to-top" onclick="scrollToTop()" title="Scroll to top" aria-label="Scroll to top">
+    <i class="fas fa-chevron-up"></i>
+  </button>
+
+
+  <main id="main-content">
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">Towards Generalizable Robotic Manipulation in Dynamic Environments</h1>
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">
+                <a href="https://github.com/FangHeng" target="_blank">Heng Fang</a><sup>1</sup>,</span>
+                <span class="author-block">
+                  <!-- <a href="#" target="_blank"> -->Shangru Li<!-- </a> --><sup>1</sup>,</span>
+                  <span class="author-block">
+                    <!-- <a href="#" target="_blank"> -->Shuhan Wang<!-- </a> --><sup>1</sup>,
+                  </span>
+                  <span class="author-block">
+                    <!-- <a href="#" target="_blank"> -->Xuanyang Xi<!-- </a> --><sup>2</sup>,
+                  </span>
+                  <span class="author-block">
+                    <a href="https://dk-liang.github.io/" target="_blank">Dingkang Liang</a><sup>1</sup>,
+                  </span>
+                  <span class="author-block">
+                    <a href="https://scholar.google.com/citations?user=UeltiQ4AAAAJ&hl=en" target="_blank">Xiang Bai</a><sup>1</sup>
+                  </span>
+                  </div>
+
+                  <div class="is-size-5 publication-authors">
+                    <span class="author-block"><sup>1</sup>Huazhong University of Science and Technology, <sup>2</sup>Huawei Technologies Co. Ltd</span>
+                  </div>
+
+                  <div class="column has-text-centered">
+                    <div class="publication-links">
+                      <span class="link-block">
+                        <a href="https://arxiv.org/abs/2603.15620" target="_blank"
+                        class="external-link button is-normal is-rounded is-dark">
+                        <span class="icon">
+                          <i class="ai ai-arxiv"></i>
+                        </span>
+                        <span>arXiv</span>
+                      </a>
+                    </span>
+
+                    <span class="link-block">
+                      <a href="https://arxiv.org/pdf/2603.15620" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fas fa-file-pdf"></i>
+                      </span>
+                      <span>Paper</span>
+                      </a>
+                    </span>
+
+                    <span class="link-block">
+                      <a href="https://github.com/H-EmbodVis/DOMINO" target="_blank"
+                        class="external-link button is-normal is-rounded is-dark">
+                        <span class="icon">
+                          <i class="fab fa-github"></i>
+                        </span>
+                        <span>Code</span>
+                      </a>
+                    </span>
+
+              <span class="link-block">
+                <a href="#" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <p style="font-size: 18px">🤗</p>
+                  </span>
+                  <span>Dataset (TBD)</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- Teaser image-->
+<section class="hero teaser" style="margin-top: -30px;">
+  <div class="container is-max-desktop">
+    <div class="hero-body" style="padding-top: 0; padding-bottom: 2rem;">
+      <img src="static/images/intro.png" alt="DOMINO Teaser" width="100%" />
+      <h2 class="subtitle has-text-centered" style="margin-top: 20px;">
+        DOMINO introduces a large-scale benchmark for dynamic manipulation, while PUMA couples historical motion cues with future state anticipation to achieve highly reactive embodied intelligence.
+      </h2>
+    </div>
+  </div>
+</section>
+<!-- End teaser image -->
+
+<!-- Paper abstract -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Vision-Language-Action (VLA) models excel in static manipulation but struggle in dynamic environments with moving targets. This performance gap primarily stems from a scarcity of dynamic manipulation datasets and the reliance of mainstream VLAs on single-frame observations, restricting their spatiotemporal reasoning capabilities. To address this, we introduce DOMINO, a large-scale dataset and benchmark for generalizable dynamic manipulation, featuring 35 tasks with hierarchical complexities, over 110K expert trajectories, and a multi-dimensional evaluation suite. Through comprehensive experiments, we systematically evaluate existing VLAs on dynamic tasks, explore effective training strategies for dynamic awareness, and validate the generalizability of dynamic data. Furthermore, we propose PUMA, a dynamics-aware VLA architecture. By integrating scene-centric historical optical flow and specialized world queries to implicitly forecast object-centric future states, PUMA couples history-aware perception with short-horizon prediction. Results demonstrate that PUMA achieves state-of-the-art performance, yielding a 6.3% absolute improvement in success rate over baselines. Moreover, we show that training on dynamic data fosters robust spatiotemporal representations that transfer to static tasks.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End paper abstract -->
+
+
+<!-- Video grid -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered" style="margin-bottom: 2rem;">
+      <div class="column is-full">
+        <h2 class="title is-3">Qualitative Demonstrations</h2>
+      </div>
+    </div>
+    <div class="columns is-multiline">
+<div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Aloha-AgileX</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 1</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Adjust Bottle</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level1_adjust_bottle/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level1_adjust_bottle/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level1_adjust_bottle/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level1_adjust_bottle/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level1_adjust_bottle/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Aloha-AgileX</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 2</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Beat Block Hammer</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level2_beat_block_hammer/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level2_beat_block_hammer/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level2_beat_block_hammer/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level2_beat_block_hammer/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level2_beat_block_hammer/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Aloha-AgileX</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 3</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Click Alarmclock</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level3_click_alarmclock/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level3_click_alarmclock/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level3_click_alarmclock/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level3_click_alarmclock/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_clean_level3_click_alarmclock/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Aloha-AgileX</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 1</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Random</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Click Bell</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level1_click_bell/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level1_click_bell/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level1_click_bell/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level1_click_bell/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level1_click_bell/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Aloha-AgileX</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 2</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Random</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Dump Bin Bigbin</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level2_dump_bin_bigbin/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level2_dump_bin_bigbin/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level2_dump_bin_bigbin/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level2_dump_bin_bigbin/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level2_dump_bin_bigbin/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Aloha-AgileX</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 3</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Random</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Grab Roller</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level3_grab_roller/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level3_grab_roller/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level3_grab_roller/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level3_grab_roller/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/aloha_random_level3_grab_roller/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Franka-Panda</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 1</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Move Can Pot</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level1_move_can_pot/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level1_move_can_pot/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level1_move_can_pot/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level1_move_can_pot/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level1_move_can_pot/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Franka-Panda</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 2</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Move Playingcard Away</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level2_move_playingcard_away/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level2_move_playingcard_away/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level2_move_playingcard_away/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level2_move_playingcard_away/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level2_move_playingcard_away/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Franka-Panda</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 3</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Move Stapler Pad</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level3_move_stapler_pad/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level3_move_stapler_pad/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level3_move_stapler_pad/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level3_move_stapler_pad/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/franka_clean_level3_move_stapler_pad/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Piper</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 1</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Place A2B Left</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level1_place_a2b_left/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level1_place_a2b_left/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level1_place_a2b_left/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level1_place_a2b_left/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level1_place_a2b_left/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Piper</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 2</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Place A2B Right</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level2_place_a2b_right/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level2_place_a2b_right/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level2_place_a2b_right/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level2_place_a2b_right/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level2_place_a2b_right/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: Piper</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 3</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Place Mouse Pad</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level3_place_mouse_pad/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level3_place_mouse_pad/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level3_place_mouse_pad/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level3_place_mouse_pad/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/piper_clean_level3_place_mouse_pad/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: UR5-Wsg</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 1</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Place Bread Basket</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level1_place_bread_basket/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level1_place_bread_basket/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level1_place_bread_basket/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level1_place_bread_basket/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level1_place_bread_basket/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: UR5-Wsg</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 2</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Place Bread Skillet</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level2_place_bread_skillet/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level2_place_bread_skillet/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level2_place_bread_skillet/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level2_place_bread_skillet/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level2_place_bread_skillet/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: UR5-Wsg</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 3</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Place Can Basket</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level3_place_can_basket/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level3_place_can_basket/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level3_place_can_basket/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level3_place_can_basket/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ur5_clean_level3_place_can_basket/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+    <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: ARX-X5</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 1</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Handover Block</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level1_handover_block/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level1_handover_block/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level1_handover_block/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level1_handover_block/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level1_handover_block/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: ARX-X5</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 2</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Handover Mic</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level2_handover_mic/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level2_handover_mic/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level2_handover_mic/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level2_handover_mic/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level2_handover_mic/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      <div class="column is-half">
+        <div class="has-text-centered" style="margin-bottom: 0.1rem;">
+          <span class="tag is-info is-light" style="font-size: 0.85rem;">Robot: ARX-X5</span>
+          <span class="tag is-success is-light" style="font-size: 0.85rem;">Level 3</span>
+          <span class="tag is-warning is-light" style="font-size: 0.85rem;">Env: Clean</span>
+          <div style="font-weight: 600; margin-top: 0.2rem; font-size: 1.1rem; color: #363636;">Hanging Mug</div>
+        </div>
+        <div class="carousel results-carousel">
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level3_hanging_mug/episode0.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level3_hanging_mug/episode1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level3_hanging_mug/episode2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level3_hanging_mug/episode3.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item">
+            <video poster="" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos/ARX_clean_level3_hanging_mug/episode4.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      </div>
+  </div>
+</section>
+<!-- End video grid -->
+
+<!-- DOMINO Dataset -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <h2 class="title is-3">DOMINO Dataset</h2>
+        <div class="content has-text-justified">
+          <p>
+            DOMINO is a large-scale dataset tailored for generalizable dynamic manipulation. It features 35 diverse dynamic tasks across 5 distinct robot embodiments and provides over 110K expert trajectories. The tasks are organized into a three-tiered difficulty hierarchy progressing from predictable low-order dynamics to stochastic and abrupt dynamics.
+          </p>
+        </div>
+        <img src="static/images/dataset.png" alt="DOMINO Dataset Statistics" width="100%" />
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End DOMINO Dataset -->
+
+<!-- PUMA Method -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <h2 class="title is-3">PUMA Architecture</h2>
+        <div class="content has-text-justified">
+          <p>
+            We propose the Predictive Unified Manipulation Architecture (PUMA) to address the spatiotemporal challenges of dynamic environments. PUMA integrates scene-centric historical optical flow to capture motion cues and employs specialized world queries to implicitly forecast object-centric future states. This design endows the model with a dynamic understanding of the physical world for anticipatory interactions.
+          </p>
+        </div>
+        <img src="static/images/method.png" alt="PUMA Method" width="100%" />
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End PUMA Method -->
+
+<!-- Performance -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <h2 class="title is-3">Performance</h2>
+        <div class="content has-text-justified">
+          <p>
+            PUMA achieves state-of-the-art performance on the DOMINO benchmark and yields a 6.3% absolute improvement in success rate over strong baselines. PUMA demonstrates substantial performance gains on highly challenging dynamic tasks where existing methods struggle. This highlights its robustness in handling complex object dynamics.
+          </p>
+        </div>
+        <img src="static/images/perform.png" alt="Performance Table" width="90%" style="margin-bottom: 20px;" />
+        <img src="static/images/radar.png" alt="Performance Radar Chart" width="40%" />
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End Performance -->
+
+<!-- Generalization -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <h2 class="title is-3">Generalization of Dynamic Data</h2>
+        <div class="content has-text-justified">
+          <p>
+            Training on dynamic data fosters generalizable spatiotemporal representations. Exposure to dynamic interactions mitigates overfitting to static positional biases and enables effective zero-shot transfer to static environments. Co-training with static data maximizes dynamic manipulation performance by combining stable foundational priors with reactive dexterity.
+          </p>
+        </div>
+        <img src="static/images/generalization.png" alt="Generalization of Dynamic Data" width="100%" />
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End Generalization -->
+
+<!-- Full Paper Link -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <h2 class="title is-3">More Details</h2>
+        <div class="content">
+          <p class="is-size-5">
+            Please refer to the <strong><a href="https://arxiv.org/pdf/2603.15620" target="_blank">full paper</a></strong> for detailed discussions and comprehensive experimental results.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End Full Paper Link -->
+
+<!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <div class="bibtex-header">
+        <h2 class="title">BibTeX</h2>
+        <button class="copy-bibtex-btn" onclick="copyBibTeX()" title="Copy BibTeX to clipboard">
+          <i class="fas fa-copy"></i>
+          <span class="copy-text">Copy</span>
+        </button>
+      </div>
+      <pre id="bibtex-code"><code>@article{fang2026towards,
+      title={Towards Generalizable Robotic Manipulation in Dynamic Environments},
+      author={Fang, Heng and Li, Shangru and Wang, Shuhan and Xi, Xuanyang and Liang, Dingkang and Bai, Xiang},
+      journal={arXiv preprint arXiv:2603.15620},
+      year={2026}
+}</code></pre>
+    </div>
+</section>
+<!--End BibTex citation -->
+
+
+  <footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+
+          <p>
+            This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a> which was adopted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+            You are free to borrow the source code of this website, we just ask that you link back to this page in the footer. <br> This website is licensed under a <a rel="license"  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+  </body>
+  </html>
