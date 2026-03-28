@@ -18,7 +18,7 @@
 Dynamic manipulation requires robots to continuously adapt to moving objects and unpredictable environmental changes. Existing Vision-Language-Action (VLA) models rely on static single-frame observations, failing to capture essential spatiotemporal dynamics. We introduce **DOMINO**, a comprehensive benchmark for this underexplored frontier, and **PUMA**, a predictive architecture that couples historical motion cues with future state anticipation to achieve highly reactive embodied intelligence.
 
 <div  align="center">    
- <img src="./assets/static/intro.png" width = "70%"  align=center />
+ <img src="./assets/static/intro.png" width = "90%"  align=center />
 </div>
 
 <details>
@@ -174,6 +174,7 @@ We build upon the following great works and open source repositories
 * [RoboTwin 2.0](https://github.com/RoboTwin-Platform/RoboTwin)
 * [starVLA](https://github.com/starVLA/starVLA)
 * [Grounded-SAM-2](https://github.com/IDEA-Research/Grounded-SAM-2)
+* [Qwen3-VL](https://github.com/QwenLM/Qwen3-VL/tree/main)
 * [SAPIEN](https://github.com/haosulab/SAPIEN)
 
 
