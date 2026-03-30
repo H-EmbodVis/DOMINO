@@ -1,0 +1,7 @@
+transformers
+addict
+yapf
+numpy==1.26.4
+opencv-python
+supervision>=0.22.0
+pycocotools

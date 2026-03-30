@@ -55,7 +55,7 @@ More visual demos can be found on our [project homepage](https://h-embodvis.gith
 * [x] Release the paper
 * [x] Release DOMINO benchmark code
 * [x] Release DOMINO dataset on [HuggingFace](https://huggingface.co/datasets/h-embodvis/DOMINO) and [ModelScope](https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO)
-* [ ] Release PUMA training code and evaluation code
+* [x] Release PUMA training code and evaluation code
 * [ ] Release PUMA checkpoint
 * [ ] Support Huawei Ascend NPUs
 
@@ -118,7 +118,7 @@ We provide an automated pipeline for data collection. You can collect data by ru
 
 ```bash
 bash collect_data.sh ${task_name} ${task_config} ${gpu_id}
-# Example: bash collect_data.sh beat_block_hammer demo_clean_dynamic 0
+# Example: bash collect_data.sh adjust_bottle demo_clean_dynamic 0
 ```
 
 After collection, the data will be stored under `data/${task_name}/${task_config}` in **HDF5 format**. For the full data collection process and common issues, please refer to the [RoboTwin Data Collection Tutorial](https://robotwin-platform.github.io/doc/usage/collect-data.html).
@@ -147,7 +147,7 @@ To evaluate a trained policy, use the following command. The `task_config` field
 bash eval.sh ${task_name} ${task_config} ${ckpt_setting} ${expert_data_num} ${seed} ${gpu_id}
 
 # Example: Evaluate a policy trained on `demo_clean_dynamic` and tested on `demo_clean_dynamic`
-# bash eval.sh beat_block_hammer demo_clean_dynamic demo_clean_dynamic 50 0 0
+# bash eval.sh adjust_bottle demo_clean_dynamic demo_clean_dynamic 50 0 0
 ```
 
 <details>
@@ -164,8 +164,118 @@ To better evaluate dynamic manipulation, we have introduced several modification
 
 ### 2. PUMA (VLA Policy)
 
-*Instructions for setting up the PUMA environment are coming soon...*
+> More details about the PUMA architecture can be found in the [PUMA README](policy/PUMA/README.md).
 
+PUMA is a predictive VLA architecture that couples historical motion cues with future state anticipation to achieve highly reactive embodied intelligence.
+
+#### 2.1 Installation Steps
+
+The codebase is provided in `policy/PUMA`. Please set up the environment from this directory.
+
+**Step 1: Create Conda Environment**
+```bash
+conda create -n puma python=3.10 -y
+conda activate puma
+```
+
+**Step 2: Install Dependencies and PUMA**
+Make sure to install a PyTorch version that matches your CUDA toolkit. We recommend CUDA 12.4.
+
+```bash
+# 1. Install PUMA Core Dependencies
+cd policy/PUMA
+pip install -r requirements.txt
+pip install flash-attn==2.7.4.post1 --no-build-isolation
+
+# 2. Install GroundingDINO for Grounded-SAM-2
+cd PUMA/model/modules/grounding_sam/grounding_dino
+pip install -r requirements.txt
+pip install --no-build-isolation -e .
+python setup.py build_ext --inplace
+cd ..
+
+# 3. Install SAM2
+pip install --no-build-isolation -e .
+cd ../../../..
+
+# 4. Install PUMA Package
+pip install -e .
+```
+
+<details close>
+<summary><b>Common Issues (Flash-Attn)</b></summary>
+
+`flash-attn` can be tricky to install because it must match your system’s CUDA toolkit (`nvcc`) and PyTorch versions. The `--no-build-isolation` flag resolves most issues, but on newer systems you may need to manually choose a compatible `flash-attn` version. Ensure your CUDA driver/toolkit and torch versions are aligned. Check your environment:
+
+```bash
+nvcc -V
+pip list | grep -E 'torch|transformers|flash-attn'
+```
+
+If issues persist, pick a `flash-attn` release that matches your versions (CUDA and torch) or ask ChatGPT to help with the outputs above. We have verified that `flash-attn==2.7.4.post1` works well with nvcc versions `12.0` and `12.4`.
+</details>
+
+#### 2.2 Download Pre-trained Weights
+
+PUMA requires both a Vision-Language-Action base model and grounding models (SAM2 + GroundingDINO). Please download the following weights and place them under `policy/PUMA/playground/Pretrained_models`.
+
+1. **Base VLM Model**
+   - Download the `Qwen3-VL-4B-Instruct-Action` base model from Hugging Face: [StarVLA/Qwen3-VL-4B-Instruct-Action](https://huggingface.co/StarVLA/Qwen3-VL-4B-Instruct-Action)
+   - Place it at: `policy/PUMA/playground/Pretrained_models/Qwen3-VL-4B-Instruct-Action`
+
+2. **Grounded-SAM-2 Models**
+   - **SAM 2.1 Large**: Download `sam2.1_hiera_large.pt` from [Meta Segment Anything 2.1](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt)
+   - **GroundingDINO Swin-T**: Download `groundingdino_swint_ogc.pth` from [IDEA-Research GroundingDINO](https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth)
+   - Place all downloaded files at: `policy/PUMA/playground/Pretrained_models/grounded_sam2/`
+
+<details close>
+<summary><b>Click to view example directory structure</b></summary>
+The resulting directory structure should look like this:
+
+```text
+policy/PUMA/playground/Pretrained_models/
+├── Qwen3-VL-4B-Instruct-Action/
+│   ├── config.json
+│   ├── model.safetensors.index.json
+│   └── ...
+└── grounded_sam2/
+    ├── groundingdino_swint_ogc.pth
+    └── sam2.1_hiera_large.pt
+```
+</details>
+
+#### 2.3 Training PUMA
+
+We provide the main training launch script inside `policy/PUMA/scripts/run_scripts/run_lerobot_robotwin_puma.sh`.
+
+1. Review and modify the environment variables in `scripts/run_scripts/run_lerobot_robotwin_puma.sh` (e.g., `DATA_ROOT_DIR`, `RUN_ROOT_DIR`) to match your system settings.
+2. Launch the training:
+```bash
+cd policy/PUMA
+bash scripts/run_scripts/run_lerobot_robotwin_puma.sh
+```
+
+#### 2.4 Evaluation
+
+The evaluation involves communication between the `PUMA` policy server and the `DOMINO` simulation environment via WebSockets.
+
+**Step 1: Start the PUMA Policy Server**
+Open a new terminal, activate the `puma` environment, and launch the server:
+```bash
+conda activate puma
+cd policy/PUMA
+# Make sure to edit your checkpoint path in `examples/Robotwin/eval_files/deploy_policy.yml` and `run_policy_server.sh` first!
+bash examples/Robotwin/eval_files/run_policy_server.sh
+```
+
+**Step 2: Start the DOMINO Simulation**
+In another terminal, activate your simulation environment (`domino`) and launch the evaluation loop:
+```bash
+conda activate domino
+cd policy/PUMA/examples/Robotwin/eval_files
+# Example: Evaluate on adjust_bottle
+bash eval.sh adjust_bottle demo_clean_dynamic puma_demo 0 0
+```
 
 
 ## 👍 Acknowledgement
