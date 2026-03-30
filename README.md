@@ -4,7 +4,7 @@
     <a href="https://arxiv.org/abs/2603.15620"><img src="https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=Arxiv"></a>
     <a href="https://h-embodvis.github.io/DOMINO/"><img src="https://img.shields.io/badge/Homepage-project-orange.svg?logo=googlehome"></a>
     <a href="https://huggingface.co/datasets/h-embodvis/DOMINO"><img src="https://img.shields.io/badge/HuggingFace-Dataset-yellow.svg?logo=huggingface"></a>
-    <!-- <a href="https://huggingface.co/models/h-embodvis/"><img src="https://img.shields.io/badge/HuggingFace-Model-green.svg?logo=huggingface"></a> -->
+    <a href="https://huggingface.co/H-EmbodVis/PUMA"><img src="https://img.shields.io/badge/HuggingFace-Model-green.svg?logo=huggingface"></a>
     <a href="https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO"><img src="https://img.shields.io/badge/ModelScope-Dataset-37CED1.svg?logo=modelscope"></a>
     <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square"></a>
 
@@ -56,7 +56,7 @@ More visual demos can be found on our [project homepage](https://h-embodvis.gith
 * [x] Release DOMINO benchmark code
 * [x] Release DOMINO dataset on [HuggingFace](https://huggingface.co/datasets/h-embodvis/DOMINO) and [ModelScope](https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO)
 * [x] Release PUMA training code and evaluation code
-* [ ] Release PUMA checkpoint
+* [x] Release PUMA checkpoint
 * [ ] Support Huawei Ascend NPUs
 
 
