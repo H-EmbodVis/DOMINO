@@ -55,8 +55,8 @@ datasets:
   vla_data:
     dataset_py: lerobot_datasets
     num_workers: 8
-    data_root_dir: /path/to/datasets
-    data_mix: robotwin
+    data_root_dir: /path/to/datasets/domino
+    data_mix: robotwin_dynamic_task
     action_type: abs_qpos
     default_image_resolution: [3, 224, 224]
     per_device_batch_size: 16

@@ -33,7 +33,7 @@ BASE_VLM="${BASE_VLM:-${DEFAULT_BASE_VLM}}"
 PER_DEVICE_BATCH_SIZE="${PER_DEVICE_BATCH_SIZE:-8}"
 
 # Robotwin dataset settings
-DATA_ROOT_DIR="${DATA_ROOT_DIR:-/path/to/datasets}"
+DATA_ROOT_DIR="${DATA_ROOT_DIR:-/path/to/datasets/domino}"
 DATA_MIX="${DATA_MIX:-robotwin_dynamic_task}"
 
 TITLE="${TITLE:-${title:-}}"
@@ -67,7 +67,7 @@ INCLUDE_STATE="${INCLUDE_STATE:-0}"
 STATE_DIM="${STATE_DIM:-14}"
 
 # W&B
-WANDB_PROJECT="${WANDB_PROJECT:-PUMA_Robotwin}"
+WANDB_PROJECT="${WANDB_PROJECT:-PUMA}"
 WANDB_ENTITY="${WANDB_ENTITY:-your_wandb_entity}"
 if [[ -z "${WANDB_MODE:-}" ]]; then
   if [[ "${ENABLE_WANDB:-0}" == "1" ]]; then

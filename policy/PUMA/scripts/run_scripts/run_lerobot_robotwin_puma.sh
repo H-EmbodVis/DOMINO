@@ -18,7 +18,7 @@ export NUMEXPR_NUM_THREADS=1
 
 # Model & data
 export BASE_VLM="${BASE_VLM:-./playground/Pretrained_models/Qwen3-VL-4B-Instruct-Action}"
-export DATA_ROOT_DIR="${DATA_ROOT_DIR:-/path/to/datasets/robotwin}"
+export DATA_ROOT_DIR="${DATA_ROOT_DIR:-/path/to/datasets/domino}"
 export DATA_MIX="${DATA_MIX:-robotwin_dynamic_task}"
 export WORLD_QUERY_NUM="${WORLD_QUERY_NUM:-4}"
 export HISTORY_K="${HISTORY_K:-4}"
