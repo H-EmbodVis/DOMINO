@@ -55,7 +55,7 @@ datasets:
   vla_data:
     dataset_py: lerobot_datasets
     num_workers: 8
-    data_root_dir: /mnt/zhouxin-mnt/vla/data/robotwin/lerobot_clean
+    data_root_dir: /path/to/datasets
     data_mix: robotwin
     action_type: abs_qpos
     default_image_resolution: [3, 224, 224]

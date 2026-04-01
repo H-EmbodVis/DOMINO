@@ -33,8 +33,8 @@ BASE_VLM="${BASE_VLM:-${DEFAULT_BASE_VLM}}"
 PER_DEVICE_BATCH_SIZE="${PER_DEVICE_BATCH_SIZE:-8}"
 
 # Robotwin dataset settings
-DATA_ROOT_DIR="${DATA_ROOT_DIR:-/mnt/zhouxin-mnt/vla/data/robotwin/lerobot_clean}"
-DATA_MIX="${DATA_MIX:-robotwin}"
+DATA_ROOT_DIR="${DATA_ROOT_DIR:-/path/to/datasets}"
+DATA_MIX="${DATA_MIX:-robotwin_dynamic_task}"
 
 TITLE="${TITLE:-${title:-}}"
 
