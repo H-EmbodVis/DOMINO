@@ -6,7 +6,7 @@
     <a href="https://huggingface.co/datasets/h-embodvis/DOMINO"><img src="https://img.shields.io/badge/HuggingFace-Dataset-yellow.svg?logo=huggingface"></a>
     <a href="https://huggingface.co/H-EmbodVis/PUMA"><img src="https://img.shields.io/badge/HuggingFace-Model-green.svg?logo=huggingface"></a>
     <a href="https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO"><img src="https://img.shields.io/badge/ModelScope-Dataset-37CED1.svg?logo=modelscope"></a>
-    <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square"></a>
+    <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square&logo=apache"></a>
 
 <h5 align="center"><em>Heng Fang<sup>1</sup>, Shangru Li<sup>1</sup>, Shuhan Wang<sup>1</sup>, Xuanyang Xi<sup>2</sup>, Dingkang Liang<sup>1</sup>, Xiang Bai<sup>1</sup> </em></h5>
 <sup>1</sup> Huazhong University of Science and Technology, <sup>2</sup> Huawei Technologies Co. Ltd 

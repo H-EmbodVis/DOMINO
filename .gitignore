@@ -1,4 +1,6 @@
 models/
+!policy/PUMA/PUMA/model/modules/grounding_sam/grounding_dino/groundingdino/models/
+!policy/PUMA/PUMA/model/modules/grounding_sam/grounding_dino/groundingdino/models/**
 data/*
 converted_data/*
 !data/process_stuck.py
