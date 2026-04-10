@@ -57,6 +57,7 @@ More visual demos can be found on our [project homepage](https://h-embodvis.gith
 * [x] Release DOMINO dataset on [HuggingFace](https://huggingface.co/datasets/h-embodvis/DOMINO) and [ModelScope](https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO)
 * [x] Release PUMA training code and evaluation code
 * [x] Release PUMA checkpoint
+* [ ] Add real-world evaluation results
 * [ ] Support Huawei Ascend NPUs
 
 
