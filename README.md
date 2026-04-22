@@ -56,7 +56,8 @@ More visual demos can be found on our [project homepage](https://h-embodvis.gith
 * [x] Release DOMINO benchmark code
 * [x] Release DOMINO dataset on [HuggingFace](https://huggingface.co/datasets/h-embodvis/DOMINO) and [ModelScope](https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO)
 * [x] Release PUMA training code and evaluation code
-* [x] Release PUMA checkpoint
+* [x] Release PUMA checkpoint on [HuggingFace](https://huggingface.co/H-EmbodVis/PUMA)
+* [x] Support [StarVLA](https://github.com/starVLA/starVLA) codebase (evaluation code available [here](https://github.com/starVLA/starVLA/tree/starVLA_dev/examples/DOMINO))
 * [ ] Add real-world evaluation results
 * [ ] Support Huawei Ascend NPUs
 
