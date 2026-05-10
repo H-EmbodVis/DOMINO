@@ -96,7 +96,6 @@ class place_a2b_right(Base_Task):
             modelname=self.selected_modelname_A,
             convex=True,
             model_id=self.selected_model_id_A,
-            is_static=not self.use_dynamic,
         )
 
         self.selected_modelname_B = np.random.choice(object_list_np)
