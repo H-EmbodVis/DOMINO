@@ -86,6 +86,7 @@ class dump_bin_bigbin(Base_Task):
                 self.sphere_lst[-1].find_component_by_type(sapien.physx.PhysxRigidDynamicComponent).mass = 0.0001
 
         if self.use_dynamic:
+            self._garbage_physics_released = False
             self.garbage_offsets = []
             bin_inv = np.linalg.inv(self.deskbin.get_pose().to_transformation_matrix())
             for sphere in self.sphere_lst:
@@ -145,6 +146,31 @@ class dump_bin_bigbin(Base_Task):
                     p = world_mat[:3, 3]
                     q = t3d.quaternions.mat2quat(world_mat[:3, :3])
                     sphere.set_pose(sapien.Pose(p, q))
+
+    def release_garbage_physics(self) -> bool:
+        """Release garbage spheres from kinematic bin-following."""
+        if not self.use_dynamic:
+            return False
+        if getattr(self, "_garbage_physics_released", False):
+            return True
+
+        for sphere in self.sphere_lst:
+            sphere_component = sphere.find_component_by_type(
+                sapien.physx.PhysxRigidDynamicComponent
+            )
+            if sphere_component:
+                sphere_component.set_kinematic(False)
+                sphere_component.set_linear_velocity(np.zeros(3))
+                sphere_component.set_angular_velocity(np.zeros(3))
+
+        self._garbage_physics_released = True
+        return True
+
+    def stop_dynamic_object_motion(self) -> bool:
+        stopped = super().stop_dynamic_object_motion()
+        if stopped:
+            self.release_garbage_physics()
+        return stopped
 
     def play_once(self):
         if self.use_dynamic:
@@ -237,14 +263,7 @@ class dump_bin_bigbin(Base_Task):
                 except Exception:
                     pass
         
-        for sphere in self.sphere_lst:
-            sphere_component = sphere.find_component_by_type(
-                sapien.physx.PhysxRigidDynamicComponent
-            )
-            if sphere_component:
-                sphere_component.set_kinematic(False)
-                sphere_component.set_linear_velocity(np.zeros(3))
-                sphere_component.set_angular_velocity(np.zeros(3))
+        self.release_garbage_physics()
 
         if grasp_deskbin_arm_tag == "right":
             self.move(self.move_by_displacement(grasp_deskbin_arm_tag, z=0.08, move_axis="arm"))
