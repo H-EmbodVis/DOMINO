@@ -31,6 +31,8 @@ Vision-Language-Action (VLA) models excel in static manipulation but struggle in
 
 ### 📰 News
 
+**[2026/06/18]** 🎉 DOMINO has been accepted to **ECCV 2026**!
+
 **[2026/05/29]** 🙏 Special thanks to the [Qwen team](https://github.com/QwenLM) for using DOMINO in [Qwen-VLA](https://arxiv.org/abs/2605.30280) as a **dynamic manipulation OOD benchmark**! We welcome everyone to try DOMINO for evaluating VLA robustness.
 
 **[2026/04/22]** 🔥 DOMINO now supports the [StarVLA](https://github.com/starVLA/starVLA) codebase! Evaluation code is available [here](https://github.com/starVLA/starVLA/tree/starVLA_dev/examples/DOMINO).
@@ -309,10 +311,10 @@ We build upon the following great works and open source repositories
 ## 📖 Citation
 
 ```bibtex
-@article{fang2026towards,
+@inproceedings{fang2026towards,
       title={Towards Generalizable Robotic Manipulation in Dynamic Environments},
       author={Fang, Heng and Li, Shangru and Wang, Shuhan and Xi, Xuanyang and Liang, Dingkang and Bai, Xiang},
-      journal={arXiv preprint arXiv:2603.15620},
+      booktitle={European Conference on Computer Vision (ECCV)},
       year={2026}
 }
 ```
