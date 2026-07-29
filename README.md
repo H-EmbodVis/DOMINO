@@ -8,8 +8,8 @@
     <a href="https://www.modelscope.cn/datasets/H-EmbodVis/DOMINO"><img src="https://img.shields.io/badge/ModelScope-Dataset-37CED1.svg?logo=modelscope"></a>
     <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square&logo=apache"></a>
 
-<h5 align="center"><em>Heng Fang<sup>1</sup>, Shangru Li<sup>1</sup>, Shuhan Wang<sup>1</sup>, Xuanyang Xi<sup>2</sup>, Dingkang Liang<sup>1</sup>, Xiang Bai<sup>1</sup> </em></h5>
-<sup>1</sup> Huazhong University of Science and Technology, <sup>2</sup> Huawei Technologies Co. Ltd 
+<h5 align="center"><em>Heng Fang<sup>1</sup>, Shangru Li<sup>1</sup>, Shuhan Wang<sup>1</sup>, Xuanyang Xi<sup>2</sup>, <a href="https://dk-liang.github.io/">Dingkang Liang</a><sup>1,†</sup>, <a href="https://scholar.google.com/citations?user=UeltiQ4AAAAJ&hl=en">Xiang Bai</a><sup>1</sup> </em></h5>
+<sup>1</sup> Huazhong University of Science and Technology, <sup>2</sup> Huawei Technologies Co. Ltd, <sup>†</sup> Corresponding Author
 </div>
 
 
@@ -181,6 +181,25 @@ To better evaluate dynamic manipulation, we have introduced several modification
 </details>
 
 **Note**: The policy evaluation framework is fully compatible with **RoboTwin 2.0**. You can seamlessly migrate and evaluate any policies between the two repositories by simply loading a new task configuration within our codebase. 
+
+<details>
+<summary><b>Click to view Fixed-Episode Evaluation (optional)</b></summary>
+
+By default, evaluation follows the RoboTwin 2.0 protocol: candidate seeds are screened online by the expert planner until 100 solvable episodes are found. Since the RRT-based planner is stochastic, two evaluation runs may accept slightly different episode sets. For strict paired comparisons between policies, we provide an opt-in fixed-episode mode:
+
+```bash
+# Step 1 (one-off): screen episodes and save a canonical manifest
+python script/screen_episodes.py --task_name ${task_name} --task_config ${task_config} --seed 0
+
+# Step 2: evaluate with the manifest (skips online expert re-planning)
+python script/eval_policy.py --config ${deploy_policy_yml} --overrides ... \
+    --episode_manifest eval_manifest/${task_name}/${task_config}/seed0.pkl
+```
+
+The manifest stores the accepted episode seeds together with their dynamic motion info (start position, trajectory parameters, RNG state), so all policies evaluated with the same manifest see identical physical episodes. Rejected candidate seeds and reasons are logged in the accompanying `.json` summary. Note that physics replay is not bit-exact across machines, so mm-level contact differences may still occur; the manifest mode removes episode-set drift and initial-state drift, which are the dominant variance sources.
+
+</details>
+
 
 ### 2. PUMA (VLA Policy)
 
