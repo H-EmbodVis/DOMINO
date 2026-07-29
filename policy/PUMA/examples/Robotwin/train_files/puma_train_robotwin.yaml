@@ -22,7 +22,7 @@ framework:
   world_model:
     enabled: true
     world_query_num: 4
-    loss_weight: 0.5
+    loss_weight: 0.05
     supervision: per_frame
     feature_loss: cosine
     grounding_mode: image
