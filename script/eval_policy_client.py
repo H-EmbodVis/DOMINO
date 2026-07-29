@@ -25,6 +25,11 @@ from envs.utils.create_actor import UnStableError
 
 from generate_episode_instructions import *
 from eval_metrics import EvalMetricsTracker, AggregatedMetrics, EpisodeMetrics
+from episode_manifest import (
+    EpisodeManifest,
+    online_episode_provider,
+    manifest_episode_provider,
+)
 
 current_file_path = os.path.abspath(__file__)
 parent_directory = os.path.dirname(current_file_path)
@@ -312,6 +317,20 @@ def main(usr_args):
     test_num = 100
     topk = 1
 
+    # Optional fixed-episode mode: load a pre-screened episode manifest and
+    # skip online expert re-planning (see script/screen_episodes.py).
+    manifest_path = usr_args.get("episode_manifest", None)
+    manifest = None
+    if manifest_path:
+        manifest = EpisodeManifest.load(manifest_path)
+        manifest.validate_against(args)
+        if len(manifest.entries) < test_num:
+            print(f"\033[93mWarning: manifest contains {len(manifest.entries)} episodes, "
+                  f"evaluating all of them instead of {test_num}\033[0m")
+            test_num = len(manifest.entries)
+        print(f"\033[96mFixed-Episode Mode:\033[0m {manifest_path} "
+              f"({len(manifest.entries)} episodes, created {manifest.metadata.get('created_at')})")
+
     # model = get_model(usr_args)
     model = ModelClient(port=port)
     st_seed, suc_num, aggregated_metrics = eval_policy(task_name,
@@ -322,7 +341,8 @@ def main(usr_args):
                                    test_num=test_num,
                                    video_size=video_size,
                                    instruction_type=instruction_type,
-                                   policy_conda_env=policy_conda_env)
+                                   policy_conda_env=policy_conda_env,
+                                   manifest=manifest)
     suc_nums.append(suc_num)
 
     topk_success_rate = sorted(suc_nums, reverse=True)[:topk]
@@ -347,6 +367,8 @@ def main(usr_args):
         for k, v in summary.items():
             if isinstance(v, float) and np.isnan(v):
                 summary[k] = None
+        # Record which evaluation protocol was used
+        summary["episode_manifest"] = str(manifest_path) if manifest_path else None
         json.dump(summary, file, indent=2)
     
     # Save per-episode detailed results
@@ -369,16 +391,15 @@ def eval_policy(task_name,
                 test_num=100,
                 video_size=None,
                 instruction_type=None,
-                policy_conda_env=None):
+                policy_conda_env=None,
+                manifest=None):
     print(f"\033[34mTask Name: {args['task_name']}\033[0m")
     print(f"\033[34mPolicy Name: {args['policy_name']}\033[0m")
 
-    expert_check = True
     TASK_ENV.suc = 0
     TASK_ENV.test_num = 0
 
     now_id = 0
-    succ_seed = 0
     suc_test_seed_list = []
 
     policy_name = args["policy_name"]
@@ -393,38 +414,19 @@ def eval_policy(task_name,
     # Initialize aggregated metrics collector
     aggregated_metrics = AggregatedMetrics()
 
-    while succ_seed < test_num:
-        render_freq = args["render_freq"]
-        args["render_freq"] = 0
+    # Episode source: online expert filtering (RoboTwin-compatible default),
+    # or a pre-screened fixed-episode manifest.
+    if manifest is not None:
+        episode_provider = manifest_episode_provider(manifest)
+    else:
+        episode_provider = online_episode_provider(TASK_ENV, args, st_seed)
 
-        if expert_check:
-            try:
-                TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)
-                episode_info = TASK_ENV.play_once()
-                TASK_ENV.close_env()
-            except UnStableError as e:
-                TASK_ENV.close_env()
-                now_seed += 1
-                args["render_freq"] = render_freq
-                continue
-            except Exception as e:
-                TASK_ENV.close_env()
-                now_seed += 1
-                args["render_freq"] = render_freq
-                continue
-
-        if (not expert_check) or (TASK_ENV.plan_success and TASK_ENV.check_success()):
-            succ_seed += 1
-            suc_test_seed_list.append(now_seed)
-        else:
-            now_seed += 1
-            args["render_freq"] = render_freq
-            continue
-
-        # Save dynamic motion info from Expert phase
-        saved_dynamic_motion_info = getattr(TASK_ENV, '_saved_dynamic_motion_info', None)
-
-        args["render_freq"] = render_freq
+    for episode in episode_provider:
+        now_seed = episode["seed"]
+        episode_info = episode["episode_info"]
+        # Dynamic motion info from the expert phase (online) or the manifest
+        saved_dynamic_motion_info = episode["dynamic_motion_info"]
+        suc_test_seed_list.append(now_seed)
 
         TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)
         
@@ -441,11 +443,14 @@ def eval_policy(task_name,
         if args.get("use_dynamic", False):
             dynamic_init_success = TASK_ENV.init_dynamic_motion_for_eval()
             if not dynamic_init_success:
+                if manifest is not None:
+                    raise RuntimeError(
+                        f"Failed to initialize dynamic motion for manifest seed {now_seed}. "
+                        f"Manifest entries are pre-validated during screening, so the current "
+                        f"environment likely differs from the one used to build the manifest.")
                 print(f"Error: Failed to initialize dynamic motion for seed {now_seed}, skipping...")
                 TASK_ENV.close_env()
                 TASK_ENV.release_episode_resources()
-                now_seed += 1
-                succ_seed -= 1
                 continue
 
         # Check object lifting and contact-stop configurations
@@ -589,9 +594,11 @@ def eval_policy(task_name,
             f"Avg MS: \033[95m{summary['manipulation_score_mean']:.1f}\033[0m | "
             f"current seed: \033[90m{now_seed}\033[0m\n"
         )
-        now_seed += 1
 
-    return now_seed, TASK_ENV.suc, aggregated_metrics
+        if TASK_ENV.test_num >= test_num:
+            break
+
+    return now_seed + 1, TASK_ENV.suc, aggregated_metrics
 
 
 def parse_args_and_config():
