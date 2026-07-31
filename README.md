@@ -31,6 +31,8 @@ Vision-Language-Action (VLA) models excel in static manipulation but struggle in
 
 ### 📰 News
 
+**[2026/07/31]** 🚀 PUMA now runs **inference on Huawei Ascend NPUs**: NVIDIA-trained checkpoints work directly on Atlas 910 with no weight conversion — see the [Ascend guide](policy/PUMA/docs/ascend_inference.md). Ascend training code, together with ready-to-use Ascend checkpoints on HuggingFace and ModelScope, will follow shortly.
+
 **[2026/06/18]** 🎉 DOMINO has been accepted to **ECCV 2026**!
 
 **[2026/05/29]** 🙏 Special thanks to the [Qwen team](https://github.com/QwenLM) for using DOMINO in [Qwen-VLA](https://arxiv.org/abs/2605.30280) as a **dynamic manipulation OOD benchmark**! We welcome everyone to try DOMINO for evaluating VLA robustness.
@@ -76,8 +78,9 @@ More visual demos can be found on our [project homepage](https://h-embodvis.gith
 * [x] Release PUMA training code and evaluation code
 * [x] Release PUMA checkpoint on [HuggingFace](https://huggingface.co/H-EmbodVis/PUMA)
 * [x] Support [StarVLA](https://github.com/starVLA/starVLA) codebase (evaluation code available [here](https://github.com/starVLA/starVLA/tree/starVLA_dev/examples/DOMINO))
-* [ ] Add real-world evaluation results
-* [ ] Support Huawei Ascend NPUs
+* [x] Add real-world evaluation results
+* [x] Support Huawei Ascend NPUs — PUMA inference ([guide](policy/PUMA/docs/ascend_inference.md))
+* [ ] Support Huawei Ascend NPUs — PUMA training code & Ascend checkpoints on HuggingFace/ModelScope (coming soon)
 
 
 ## 🛠️ Getting Started
@@ -315,6 +318,19 @@ cd policy/PUMA/examples/Robotwin/eval_files
 # Example: Evaluate on adjust_bottle
 bash eval.sh adjust_bottle demo_clean_dynamic puma_demo 0 0
 ```
+
+#### 2.5 Ascend NPU Inference
+
+NVIDIA-trained PUMA checkpoints can be served directly on Huawei Ascend NPUs — no weight conversion, and the CUDA path is untouched:
+
+```bash
+cd policy/PUMA
+python deployment/model_server/server_policy.py \
+  --ckpt_path /absolute/path/to/checkpoints/steps_100000_pytorch_model.pt \
+  --port 9001 --device npu --use_bf16
+```
+
+Setup and the verified environment (Atlas 910 / CANN 8.5.2) are documented in the [Ascend guide](policy/PUMA/docs/ascend_inference.md). Ascend training code and Ascend checkpoints on Hugging Face / ModelScope are coming soon.
 
 
 ## 👍 Acknowledgement

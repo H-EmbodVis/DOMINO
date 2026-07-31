@@ -4,20 +4,23 @@
 
 import torch
 import os
-from typing import Optional, List
+import logging
+from typing import Optional
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
-from transformers.modeling_outputs import CausalLMOutputWithPast
-from typing import Dict, Optional, List
-from torch.nn.utils.rnn import pad_sequence
-from transformers import BatchFeature
 
-from qwen_vl_utils import process_vision_info
+from PUMA.model.modules.vlm.model_loading import resolve_torch_dtype
+from PUMA.model.modules.vlm.ascend import (
+    QWEN3_ASCEND_INFERENCE_PLAN_KEY,
+    Qwen3AscendInferencePlan,
+    configure_qwen3_ascend_inference,
+    prepare_qwen3_ascend_inference_inputs,
+    qwen3_ascend_inference_plan_context,
+)
+from PUMA.util.device import get_autocast_context
 
 
-from accelerate.logging import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 IGNORE_INDEX = -100
 IMAGE_TOKEN_INDEX = 151655
@@ -67,12 +70,21 @@ class _QWen3_VL_Interface(nn.Module):
         load_kwargs = {"local_files_only": True} if is_local_path else {}
 
         attn_impl = str(qwenvl_config.get("attn_implementation", "flash_attention_2"))
+        model_dtype = resolve_torch_dtype(qwenvl_config.get("model_dtype", "bfloat16"))
         model = Qwen3VLForConditionalGeneration.from_pretrained(
             model_id,
             attn_implementation=attn_impl,
-            dtype=torch.bfloat16,
+            dtype=model_dtype,
             **load_kwargs
         )
+        if bool(qwenvl_config.get("enable_ascend_inference_adapter", False)):
+            configure_qwen3_ascend_inference(
+                model,
+                linearize_patch_embed=bool(
+                    qwenvl_config.get("linearize_vision_patch_embed", False)
+                ),
+            )
+            logger.info("Installed required Qwen3-VL Ascend inference adapters.")
         processor = AutoProcessor.from_pretrained(model_id, **load_kwargs)
         processor.tokenizer.padding_side = "left"
 
@@ -93,13 +105,15 @@ class _QWen3_VL_Interface(nn.Module):
         **kwargs,
     ) -> CausalLMOutputWithPast:
         """
-        Forward pass delegating to underlying Qwen2.5-VL backbone.
+        Forward pass delegating to underlying Qwen3-VL backbone.
         """
+        request_plan = kwargs.pop(QWEN3_ASCEND_INFERENCE_PLAN_KEY, None)
 
-        with torch.autocast("cuda", dtype=torch.bfloat16):
-            outputs = self.model(
-                **kwargs,
-            )
+        with qwen3_ascend_inference_plan_context(request_plan):
+            with get_autocast_context(self.model.device, dtype=torch.bfloat16):
+                outputs = self.model(
+                    **kwargs,
+                )
 
         return outputs
 
@@ -115,7 +129,24 @@ class _QWen3_VL_Interface(nn.Module):
         Returns:
             GenerateOutput | Model-dependent generation return.
         """
-        with torch.autocast("cuda", dtype=torch.float16):
+        request_plan = kwargs.pop(QWEN3_ASCEND_INFERENCE_PLAN_KEY, None)
+        if request_plan is not None:
+            if self.model.device.type != "npu":
+                raise RuntimeError(
+                    "Qwen3 Ascend inference plans are only valid on NPU"
+                )
+            if not isinstance(request_plan, Qwen3AscendInferencePlan):
+                raise RuntimeError("Qwen3 generation received an invalid PUMA request plan")
+            kwargs.pop("position_ids", None)
+            if request_plan.omit_attention_mask and kwargs.get("attention_mask") is None:
+                input_ids = kwargs.get("input_ids")
+                if not isinstance(input_ids, torch.Tensor):
+                    raise RuntimeError(
+                        "Qwen3 generation cannot restore an omitted attention mask without input_ids"
+                    )
+                kwargs["attention_mask"] = torch.ones_like(input_ids)
+
+        with get_autocast_context(self.model.device, dtype=torch.float16):
             generation_output = self.model.generate(
                 **kwargs,
             )
@@ -181,7 +212,13 @@ class _QWen3_VL_Interface(nn.Module):
             labels[labels == self.processor.tokenizer.pad_token_id] = -100 ## mask out pad tokens as well
             batch_inputs['labels'] = labels
 
-        return batch_inputs.to(self.model.device)
+        if self.model.device.type != "npu" or self.training or solutions is not None:
+            return batch_inputs.to(self.model.device)
+        return prepare_qwen3_ascend_inference_inputs(
+            batch_inputs,
+            self.model.model,
+            self.model.device,
+        )
 
 
 

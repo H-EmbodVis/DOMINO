@@ -25,7 +25,7 @@ from PUMA.model.tools import auto_get_trainable_modules
 
 from PUMA.model.framework.share_tools import read_mode_config
 from PUMA.training.trainer_utils import initialize_overwatch
-from PUMA.model.framework.share_tools import dict_to_namespace
+from PUMA.model.framework.share_tools import dict_to_namespace, merge_config_overrides
 from PUMA.model.framework.__init__ import build_framework
 
 logger = initialize_overwatch(__name__)
@@ -82,6 +82,10 @@ class baseframework(PreTrainedModel):
         """
         pretrained_checkpoint = Path(pretrained_checkpoint)
         model_config, norm_stats = read_mode_config(pretrained_checkpoint)  # read config and norm_stats
+        model_config = merge_config_overrides(
+            model_config,
+            kwargs.pop("config_overrides", None),
+        )
 
         config = dict_to_namespace(model_config)
         model_config = config

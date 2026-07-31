@@ -42,3 +42,6 @@ envs/curobo/*
 # Auto-generated OpenVLA Dynamic35 builders
 policy/openvla-oft/datasets/*_clean_level1_builder.py
 !policy/openvla-oft/datasets/generate_dynamic35_builders.py
+# Ascend (CANN) operator compile cache
+kernel_meta/
+fusion_result.json

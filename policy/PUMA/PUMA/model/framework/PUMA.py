@@ -18,11 +18,17 @@ from PIL import Image
 
 from PUMA.training.trainer_utils import initialize_overwatch
 from PUMA.model.tools import FRAMEWORK_REGISTRY
+from PUMA.util.device import get_autocast_context
 from deployment.model_server.tools.image_tools import to_pil_preserve
 
 logger = initialize_overwatch(__name__)
 
 IGNORE_INDEX = -100
+# Number of prompt-template tokens emitted after the last action query token:
+# "<action>" suffix of _build_instruction_with_queries plus the chat-template
+# generation tail (<|im_end|> + assistant header). Fixed for the Qwen3 chat
+# template in transformers 4.57.0; revisit if either template changes.
+QWEN3_ACTION_QUERY_TRAILING_TOKENS = 8
 
 from PUMA.model.framework.base_framework import baseframework
 from PUMA.model.modules.vlm import get_vlm_model
@@ -252,22 +258,79 @@ class PUMA(baseframework):
 
         qwen_inputs = self.qwen_vl_interface.build_qwenvl_inputs(images=batch_images, instructions=instructions)
 
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        device = qwen_inputs["input_ids"].device
+        on_npu = device.type == "npu"
+
+        with get_autocast_context(device, dtype=torch.bfloat16):
             qwenvl_outputs = self.qwen_vl_interface(
                 **qwen_inputs,
                 output_attentions=False,
                 output_hidden_states=True,
                 return_dict=True,
+                logits_to_keep=1,
             )
             last_hidden = qwenvl_outputs.hidden_states[-1]
 
-        with torch.autocast("cuda", dtype=torch.float32):
+        with get_autocast_context(device, dtype=torch.float32):
             input_ids = qwen_inputs.get("input_ids", None)
-            action_queries = self._gather_action_token_embeddings(last_hidden, input_ids, action_token_id=self.action_token_id)
+            if on_npu:
+                # NPU: gather the fixed action-query suffix (sort/topk-free) and
+                # promote to FP32 for the FP32-pinned action head.
+                action_queries = self._gather_contiguous_action_query_embeddings(
+                    last_hidden,
+                    input_ids,
+                ).float()
+            else:
+                action_queries = self._gather_action_token_embeddings(
+                    last_hidden, input_ids, action_token_id=self.action_token_id
+                )
             pred_actions = self.action_model.predict_action(action_queries)
 
         normalized_actions = pred_actions.detach().cpu().numpy()
         return {"normalized_actions": normalized_actions}
+
+    def _gather_contiguous_action_query_embeddings(
+        self,
+        last_hidden: torch.Tensor,
+        input_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        """Extract the fixed action-query suffix without NPU sort/topk operators."""
+        if not isinstance(last_hidden, torch.Tensor) or last_hidden.ndim != 3:
+            raise ValueError("last_hidden must have shape [batch, sequence, hidden]")
+        if not isinstance(input_ids, torch.Tensor) or input_ids.ndim != 2:
+            raise ValueError("input_ids must have shape [batch, sequence]")
+
+        batch_size, sequence_length, hidden_size = last_hidden.shape
+        if input_ids.shape != (batch_size, sequence_length):
+            raise ValueError("last_hidden and input_ids batch and sequence dimensions must match")
+        if last_hidden.device != input_ids.device:
+            raise ValueError("last_hidden and input_ids must be on the same device")
+
+        required_length = self.chunk_len + QWEN3_ACTION_QUERY_TRAILING_TOKENS
+        if sequence_length < required_length:
+            raise ValueError(
+                "Qwen3 action-query suffix requires at least "
+                f"{required_length} tokens, got {sequence_length}"
+            )
+        if hidden_size <= 0:
+            raise ValueError("last_hidden hidden dimension must be positive")
+
+        start = sequence_length - required_length
+        # Guard against silent prompt-template drift: the selected window must
+        # contain exactly the action query tokens (slice + eq are NPU-safe).
+        selected_ids = input_ids.narrow(1, start, self.chunk_len)
+        if not bool(selected_ids.eq(self.action_token_id).all()):
+            raise RuntimeError(
+                "Action-query suffix does not align with the prompt template; "
+                "check _build_instruction_with_queries and "
+                "QWEN3_ACTION_QUERY_TRAILING_TOKENS"
+            )
+        return last_hidden.narrow(1, start, self.chunk_len)
+
+    def configure_action_model_precision(self):
+        """Keep the numerically sensitive action head in FP32."""
+        self.action_model.to(dtype=torch.float32)
+        return self
 
     def _gather_action_token_embeddings(
         self,

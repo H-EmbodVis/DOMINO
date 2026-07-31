@@ -9,6 +9,7 @@ Shared configuration / utility helpers for framework components:
 import os
 from pathlib import Path
 from types import SimpleNamespace
+import copy
 import json
 
 from typing import Union, List
@@ -92,6 +93,25 @@ def dict_to_namespace(d):
         OmegaConf: DictConfig instance.
     """
     return OmegaConf.create(d)
+
+
+def merge_config_overrides(config, overrides):
+    """Return a copied checkpoint config with recursive runtime overrides."""
+    merged = copy.deepcopy(config)
+    if overrides is None:
+        return merged
+    if not isinstance(merged, dict) or not isinstance(overrides, dict):
+        raise TypeError("config and config_overrides must be dictionaries")
+
+    def merge(target, source):
+        for key, value in source.items():
+            if isinstance(value, dict) and isinstance(target.get(key), dict):
+                merge(target[key], value)
+            else:
+                target[key] = copy.deepcopy(value)
+
+    merge(merged, overrides)
+    return merged
 
 
 def _to_omegaconf(x: Any):

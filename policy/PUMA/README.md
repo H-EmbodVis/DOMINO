@@ -203,3 +203,28 @@ cd policy/PUMA/examples/Robotwin/eval_files
 # Usage: bash eval.sh <task_name> <task_config> <ckpt_setting> <seed> <gpu_id> <port>
 bash eval.sh adjust_bottle demo_clean_dynamic puma_demo 0 0 9001
 ```
+
+---
+
+## 🔥 4. Running PUMA on Huawei Ascend NPUs
+
+PUMA runs on Ascend NPUs out of the box: an NVIDIA-trained checkpoint is served as-is — no weight conversion, and the CUDA path stays untouched. Ascend training code and ready-to-use Ascend checkpoints on Hugging Face / ModelScope are coming soon.
+
+Quickstart (Atlas 910, CANN 8.5.2):
+
+```bash
+# source your CANN toolkit (path depends on your installation)
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+cd policy/PUMA
+pip install -r requirements-ascend.txt   # pinned torch/torch-npu runtime; no flash-attn
+pip install --no-build-isolation -e .
+pip install -r examples/Robotwin/eval_files/requirements.txt
+
+python deployment/model_server/server_policy.py \
+  --ckpt_path /absolute/path/to/checkpoints/steps_100000_pytorch_model.pt \
+  --port 9001 \
+  --device npu \
+  --use_bf16
+```
+
+The evaluation flow is identical to [Section 3](#-3-evaluation) — only the policy server side changes. For the full walkthrough (verified environment, installation notes, and what is coming next), see **[docs/ascend_inference.md](docs/ascend_inference.md)**.
