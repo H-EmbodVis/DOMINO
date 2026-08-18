@@ -90,19 +90,48 @@ class MultiScaleDeformableAttnFunction(Function):
         return grad_value, None, None, grad_sampling_loc, grad_attn_weight, None
 
 
+def _merge_sampling_values(sampling_value_list, attention_weights, use_npu_layout):
+    bs, num_queries, num_heads, num_levels, num_points = attention_weights.shape
+    embed_dims = sampling_value_list[0].shape[1]
+    sampling_values = torch.stack(sampling_value_list, dim=-2).flatten(-2)
+
+    if use_npu_layout:
+        sampling_values = sampling_values.view(
+            bs,
+            num_heads,
+            embed_dims,
+            num_queries,
+            num_levels * num_points,
+        ).permute(0, 3, 1, 2, 4)
+        attention_weights = attention_weights.reshape(
+            bs, num_queries, num_heads, 1, num_levels * num_points
+        )
+        return (sampling_values * attention_weights).sum(-1).flatten(2)
+
+    attention_weights = attention_weights.transpose(1, 2).reshape(
+        bs * num_heads, 1, num_queries, num_levels * num_points
+    )
+    output = (sampling_values * attention_weights).sum(-1).view(
+        bs, num_heads * embed_dims, num_queries
+    )
+    return output.transpose(1, 2).contiguous()
+
+
 def multi_scale_deformable_attn_pytorch(
     value: torch.Tensor,
     value_spatial_shapes: torch.Tensor,
     sampling_locations: torch.Tensor,
     attention_weights: torch.Tensor,
+    spatial_shapes_metadata=None,
 ) -> torch.Tensor:
 
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, num_heads, num_levels, num_points, _ = sampling_locations.shape
-    value_list = value.split([H_ * W_ for H_, W_ in value_spatial_shapes], dim=1)
+    control_shapes = spatial_shapes_metadata or value_spatial_shapes
+    value_list = value.split([H_ * W_ for H_, W_ in control_shapes], dim=1)
     sampling_grids = 2 * sampling_locations - 1
     sampling_value_list = []
-    for level, (H_, W_) in enumerate(value_spatial_shapes):
+    for level, (H_, W_) in enumerate(control_shapes):
         # bs, H_*W_, num_heads, embed_dims ->
         # bs, H_*W_, num_heads*embed_dims ->
         # bs, num_heads*embed_dims, H_*W_ ->
@@ -119,18 +148,11 @@ def multi_scale_deformable_attn_pytorch(
             value_l_, sampling_grid_l_, mode="bilinear", padding_mode="zeros", align_corners=False
         )
         sampling_value_list.append(sampling_value_l_)
-    # (bs, num_queries, num_heads, num_levels, num_points) ->
-    # (bs, num_heads, num_queries, num_levels, num_points) ->
-    # (bs, num_heads, 1, num_queries, num_levels*num_points)
-    attention_weights = attention_weights.transpose(1, 2).reshape(
-        bs * num_heads, 1, num_queries, num_levels * num_points
+    return _merge_sampling_values(
+        sampling_value_list,
+        attention_weights,
+        use_npu_layout=value.device.type == "npu",
     )
-    output = (
-        (torch.stack(sampling_value_list, dim=-2).flatten(-2) * attention_weights)
-        .sum(-1)
-        .view(bs, num_heads * embed_dims, num_queries)
-    )
-    return output.transpose(1, 2).contiguous()
 
 
 class MultiScaleDeformableAttention(nn.Module):
@@ -239,6 +261,7 @@ class MultiScaleDeformableAttention(nn.Module):
         reference_points: Optional[torch.Tensor] = None,
         spatial_shapes: Optional[torch.Tensor] = None,
         level_start_index: Optional[torch.Tensor] = None,
+        spatial_shapes_metadata=None,
         **kwargs
     ) -> torch.Tensor:
 
@@ -284,7 +307,12 @@ class MultiScaleDeformableAttention(nn.Module):
         bs, num_query, _ = query.shape
         bs, num_value, _ = value.shape
 
-        assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
+        if value.device.type == "npu":
+            if spatial_shapes_metadata is None:
+                raise RuntimeError("NPU deformable attention requires Python spatial metadata")
+            assert sum(height * width for height, width in spatial_shapes_metadata) == num_value
+        else:
+            assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
 
         value = self.value_proj(value)
         if key_padding_mask is not None:
@@ -348,7 +376,11 @@ class MultiScaleDeformableAttention(nn.Module):
                 output = output.half()
         else:
             output = multi_scale_deformable_attn_pytorch(
-                value, spatial_shapes, sampling_locations, attention_weights
+                value,
+                spatial_shapes,
+                sampling_locations,
+                attention_weights,
+                spatial_shapes_metadata=spatial_shapes_metadata,
             )
 
         output = self.output_proj(output)

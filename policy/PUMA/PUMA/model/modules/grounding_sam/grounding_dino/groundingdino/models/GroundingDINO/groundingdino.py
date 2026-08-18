@@ -48,6 +48,35 @@ from .transformer import build_transformer
 from .utils import MLP, ContrastiveEmbed, sigmoid_focal_loss
 
 
+def _prepare_text_encoder_inputs(tokenized, device, special_tokens, tokenizer):
+    if device.type == "npu":
+        attention_masks, position_ids, cate_to_token_masks = (
+            generate_masks_with_special_tokens_and_transfer_map(
+                tokenized, special_tokens, tokenizer
+            )
+        )
+        tokenized["_grounding_text_self_attention_masks"] = attention_masks
+        tokenized["_grounding_text_position_ids"] = position_ids
+        cate_to_token_mask_keys = []
+        for batch_index, cate_to_token_mask in enumerate(cate_to_token_masks):
+            key = f"_grounding_text_cate_to_token_masks_{batch_index}"
+            tokenized[key] = cate_to_token_mask
+            cate_to_token_mask_keys.append(key)
+        tokenized = tokenized.to(device)
+        attention_masks = tokenized.pop("_grounding_text_self_attention_masks")
+        position_ids = tokenized.pop("_grounding_text_position_ids")
+        cate_to_token_masks = [tokenized.pop(key) for key in cate_to_token_mask_keys]
+    else:
+        tokenized = tokenized.to(device)
+        attention_masks, position_ids, cate_to_token_masks = (
+            generate_masks_with_special_tokens_and_transfer_map(
+                tokenized, special_tokens, tokenizer
+            )
+        )
+
+    return tokenized, attention_masks, position_ids, cate_to_token_masks
+
+
 class GroundingDINO(nn.Module):
     """This is the Cross-Attention Detector module that performs object detection"""
 
@@ -245,15 +274,14 @@ class GroundingDINO(nn.Module):
             captions = [t["caption"] for t in targets]
 
         # encoder texts
-        tokenized = self.tokenizer(captions, padding="longest", return_tensors="pt").to(
-            samples.device
-        )
+        tokenized = self.tokenizer(captions, padding="longest", return_tensors="pt")
         (
+            tokenized,
             text_self_attention_masks,
             position_ids,
             cate_to_token_mask_list,
-        ) = generate_masks_with_special_tokens_and_transfer_map(
-            tokenized, self.specical_tokens, self.tokenizer
+        ) = _prepare_text_encoder_inputs(
+            tokenized, samples.device, self.specical_tokens, self.tokenizer
         )
 
         if text_self_attention_masks.shape[1] > self.max_text_len:
@@ -409,4 +437,3 @@ def build_groundingdino(args):
     )
 
     return model
-

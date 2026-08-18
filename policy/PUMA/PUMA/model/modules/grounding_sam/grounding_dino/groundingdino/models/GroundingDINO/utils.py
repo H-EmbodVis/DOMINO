@@ -262,6 +262,17 @@ class ContrastiveEmbed(nn.Module):
         res.masked_fill_(~text_token_mask[:, None, :], float("-inf"))
 
         # padding to max_text_len
+        if res.device.type == "npu":
+            # NPU: avoid the sliced in-place assignment below, which lowers to
+            # an NPU-hostile scatter. cat keeps dtype/layout static.
+            padding = torch.full(
+                (*res.shape[:-1], self.max_text_len - res.shape[-1]),
+                float("-inf"),
+                device=res.device,
+                dtype=res.dtype,
+            )
+            return torch.cat((res, padding), dim=-1)
+
         new_res = torch.full((*res.shape[:-1], self.max_text_len), float("-inf"), device=res.device)
         new_res[..., : res.shape[-1]] = res
 

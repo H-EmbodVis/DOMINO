@@ -35,6 +35,15 @@ from PUMA.model.framework import build_framework
 from PUMA.training.trainer_utils.trainer_tools import TrainerUtils
 from PUMA.training.trainer_utils.trainer_tools import build_param_lr_groups
 from PUMA.training.trainer_utils.config_tracker import wrap_config, AccessTrackedConfig
+from PUMA.util.device import get_autocast_context, normalize_device_type
+from PUMA.training.ascend import (
+    collect_training_metrics,
+    materialize_training_metrics,
+    maybe_enable_ascend_gradient_checkpointing,
+    raise_for_non_finite_loss,
+    setup_ascend_runtime,
+    should_check_non_finite_loss,
+)
 
 deepspeed_plugin = DeepSpeedPlugin()
 accelerator = Accelerator(deepspeed_plugin=deepspeed_plugin)
@@ -139,6 +148,7 @@ class VLATrainer(TrainerUtils):
         # training status tracking
         self.completed_steps = 0
         self.total_batch_size = self._calculate_total_batch_size()
+        self._wandb_enabled = False
     
     def prepare_training(self):
         rank = dist.get_rank() if dist.is_initialized() else 0
@@ -158,8 +168,33 @@ class VLATrainer(TrainerUtils):
         )
         self.model = self.freeze_backbones(self.model, freeze_modules=freeze_modules)
 
+        if maybe_enable_ascend_gradient_checkpointing(
+            self.model,
+            device=self.accelerator.device,
+            enabled=bool(
+                getattr(
+                    self.config.trainer,
+                    "enable_gradient_checkpointing",
+                    False,
+                )
+            ),
+        ):
+            logger.info("Enabled Qwen gradient checkpointing for Ascend training.")
+
         #  print model trainable parameters:
         self.print_trainable_parameters(self.model)
+
+        if normalize_device_type(self.accelerator.device) == "npu":
+            enable_action_fp32 = getattr(
+                self.model,
+                "enable_action_model_fp32_training",
+                None,
+            )
+            if not callable(enable_action_fp32):
+                raise RuntimeError(
+                    "Ascend training requires explicit FP32 action-head preservation"
+                )
+            enable_action_fp32()
 
         # initialize distributed training components
         self.model, self.optimizer, self.vla_train_dataloader = self.setup_distributed_training(
@@ -168,6 +203,19 @@ class VLATrainer(TrainerUtils):
             self.optimizer,
             self.vla_train_dataloader,
         )
+
+        if normalize_device_type(self.accelerator.device) == "npu":
+            unwrapped_model = self.accelerator.unwrap_model(self.model)
+            action_dtypes = {
+                parameter.dtype
+                for parameter in unwrapped_model.action_model.parameters()
+            }
+            if action_dtypes != {torch.float32}:
+                raise RuntimeError(
+                    "Ascend action head must remain FP32 after DeepSpeed prepare; "
+                    f"got {sorted(str(dtype) for dtype in action_dtypes)}"
+                )
+            logger.info("Verified Ascend action model parameters remain FP32 after DeepSpeed prepare.")
 
         self._init_wandb()
 
@@ -224,6 +272,7 @@ class VLATrainer(TrainerUtils):
                 group="vla-train",
                 config=wandb_config,
             )
+            self._wandb_enabled = wandb.run is not None
             
             logger.info(f"✅ W&B initialized: {wandb.run.url if wandb.run else 'No run URL'}")
 
@@ -306,9 +355,21 @@ class VLATrainer(TrainerUtils):
 
     def _log_metrics(self, metrics):
         """record training metrics"""
+        is_npu = normalize_device_type(self.accelerator.device) == "npu"
+        if is_npu and not self.accelerator.sync_gradients:
+            return
         if self.completed_steps % self.config.trainer.logging_frequency == 0:
             if self.accelerator.is_main_process:
-                metrics = dict(metrics)
+                metrics = materialize_training_metrics(metrics)
+                if is_npu:
+                    now = time.perf_counter()
+                    interval_steps = self.completed_steps - self._last_metric_log_step
+                    if interval_steps > 0:
+                        metrics["step_time"] = (
+                            now - self._last_metric_log_time
+                        ) / interval_steps
+                    self._last_metric_log_time = now
+                    self._last_metric_log_step = self.completed_steps
                 if "loss" not in metrics and "action_dit_loss" in metrics:
                     metrics["loss"] = metrics["action_dit_loss"]
 
@@ -321,11 +382,11 @@ class VLATrainer(TrainerUtils):
                 # debug output
                 logger.info(f"Step {self.completed_steps}, Loss: {metrics}")
                 
-                # record to W&B
-                try:
-                    wandb.log(metrics, step=self.completed_steps)
-                except Exception as e:
-                    logger.error(f"❌ Failed to log to W&B: {e}")
+                if self._wandb_enabled:
+                    try:
+                        wandb.log(metrics, step=self.completed_steps)
+                    except Exception as e:
+                        logger.error(f"❌ Failed to log to W&B: {e}")
 
     def _create_data_iterators(self):
         """create data iterators"""
@@ -359,6 +420,8 @@ class VLATrainer(TrainerUtils):
             range(self.config.trainer.max_train_steps),
             disable=not self.accelerator.is_local_main_process,
         )
+        self._last_metric_log_time = time.perf_counter()
+        self._last_metric_log_step = self.completed_steps
 
         # main training loop
         while self.completed_steps < self.config.trainer.max_train_steps:
@@ -378,10 +441,15 @@ class VLATrainer(TrainerUtils):
                 self.completed_steps += 1
             
             if self.accelerator.is_local_main_process:
+                model_time_key = (
+                    "model_enqueue_times"
+                    if normalize_device_type(self.accelerator.device) == "npu"
+                    else "model_times"
+                )
                 progress_bar.set_postfix(
                         {
                             "data_times": f"{t_end_data - t_start_data:.3f}",
-                            "model_times": f"{t_end_model - t_start_model:.3f}",
+                            model_time_key: f"{t_end_model - t_start_model:.3f}",
                         }
                     )
 
@@ -391,7 +459,12 @@ class VLATrainer(TrainerUtils):
 
             # record metrics
             step_metrics["data_time"] = t_end_data - t_start_data
-            step_metrics["model_time"] = t_end_model - t_start_model
+            model_time_key = (
+                "model_enqueue_time"
+                if normalize_device_type(self.accelerator.device) == "npu"
+                else "model_time"
+            )
+            step_metrics[model_time_key] = t_end_model - t_start_model
             self._log_metrics(step_metrics)
 
             # save checkpoint
@@ -454,7 +527,7 @@ class VLATrainer(TrainerUtils):
             self.optimizer.zero_grad()
 
             # VLA task forward propagation
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with get_autocast_context(self.accelerator.device, dtype=torch.bfloat16):
                 output_dict = self.model.forward(batch_vla)
 
                 action_loss = output_dict["action_loss"]
@@ -463,6 +536,21 @@ class VLATrainer(TrainerUtils):
                 world_loss_raw = output_dict.get("world_loss_raw", None)
                 if world_loss is not None:
                     total_loss = total_loss + world_loss
+
+            # Non-finite loss guard: on NPU by default, elsewhere only when
+            # explicitly requested via env, so the CUDA path keeps its original
+            # behavior (no per-step host sync, no raise).
+            nonfinite_interval = os.environ.get("PUMA_ASCEND_NONFINITE_CHECK_INTERVAL")
+            check_nonfinite = (
+                normalize_device_type(self.accelerator.device) == "npu"
+                or nonfinite_interval is not None
+            )
+            if check_nonfinite and should_check_non_finite_loss(
+                self.completed_steps,
+                interval="1" if nonfinite_interval is None else nonfinite_interval,
+                warmup_steps=os.environ.get("PUMA_ASCEND_NONFINITE_WARMUP_STEPS", "0"),
+            ):
+                raise_for_non_finite_loss(total_loss, step=self.completed_steps)
 
             # VLA backward propagation
             self.accelerator.backward(total_loss)
@@ -475,12 +563,12 @@ class VLATrainer(TrainerUtils):
             self.optimizer.step()
             self.lr_scheduler.step()
 
-        metrics = {"action_dit_loss": action_loss.item()}
+        metrics = {"action_dit_loss": action_loss}
         if world_loss is not None:
-            metrics["world_loss"] = world_loss.item()
+            metrics["world_loss"] = world_loss
         if world_loss_raw is not None:
-            metrics["world_loss_raw"] = world_loss_raw.item()
-        return metrics
+            metrics["world_loss_raw"] = world_loss_raw
+        return collect_training_metrics(metrics, device=self.accelerator.device)
 
     def _finalize_training(self):
         """training end processing"""
@@ -494,7 +582,7 @@ class VLATrainer(TrainerUtils):
 
 
         # close W&B
-        if self.accelerator.is_main_process:
+        if self.accelerator.is_main_process and self._wandb_enabled:
             wandb.finish()
 
         self.accelerator.wait_for_everyone()
@@ -506,6 +594,7 @@ def main(cfg) -> None:
     #  Wrap config to enable access tracking
     cfg = wrap_config(cfg)
     logger.info("✅ Configuration wrapped for access tracking")
+    setup_ascend_runtime(accelerator, runtime_logger=logger)
 
     # create output directory and save config
     output_dir = setup_directories(cfg=cfg)

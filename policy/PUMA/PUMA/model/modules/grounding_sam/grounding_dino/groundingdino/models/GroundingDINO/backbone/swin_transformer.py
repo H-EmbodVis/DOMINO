@@ -74,6 +74,19 @@ def window_reverse(windows, window_size, H, W):
     return x
 
 
+def _build_npu_shifted_window_mask(
+    padded_height, padded_width, *, window_size, shift_size, device
+):
+    coordinates_h = torch.arange(padded_height, device=device)
+    coordinates_w = torch.arange(padded_width, device=device)
+    dtype = torch.get_default_dtype()
+    regions_h = (coordinates_h >= padded_height - window_size).to(dtype)
+    regions_h = regions_h + (coordinates_h >= padded_height - shift_size).to(dtype)
+    regions_w = (coordinates_w >= padded_width - window_size).to(dtype)
+    regions_w = regions_w + (coordinates_w >= padded_width - shift_size).to(dtype)
+    return (regions_h[:, None] * 3 + regions_w[None, :])[None, :, :, None]
+
+
 class WindowAttention(nn.Module):
     """Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports both of shifted and non-shifted window.
@@ -416,22 +429,31 @@ class BasicLayer(nn.Module):
         # calculate attention mask for SW-MSA
         Hp = int(np.ceil(H / self.window_size)) * self.window_size
         Wp = int(np.ceil(W / self.window_size)) * self.window_size
-        img_mask = torch.zeros((1, Hp, Wp, 1), device=x.device)  # 1 Hp Wp 1
-        h_slices = (
-            slice(0, -self.window_size),
-            slice(-self.window_size, -self.shift_size),
-            slice(-self.shift_size, None),
-        )
-        w_slices = (
-            slice(0, -self.window_size),
-            slice(-self.window_size, -self.shift_size),
-            slice(-self.shift_size, None),
-        )
-        cnt = 0
-        for h in h_slices:
-            for w in w_slices:
-                img_mask[:, h, w, :] = cnt
-                cnt += 1
+        if x.device.type == "npu":
+            img_mask = _build_npu_shifted_window_mask(
+                Hp,
+                Wp,
+                window_size=self.window_size,
+                shift_size=self.shift_size,
+                device=x.device,
+            )
+        else:
+            img_mask = torch.zeros((1, Hp, Wp, 1), device=x.device)  # 1 Hp Wp 1
+            h_slices = (
+                slice(0, -self.window_size),
+                slice(-self.window_size, -self.shift_size),
+                slice(-self.shift_size, None),
+            )
+            w_slices = (
+                slice(0, -self.window_size),
+                slice(-self.window_size, -self.shift_size),
+                slice(-self.shift_size, None),
+            )
+            cnt = 0
+            for h in h_slices:
+                for w in w_slices:
+                    img_mask[:, h, w, :] = cnt
+                    cnt += 1
 
         mask_windows = window_partition(
             img_mask, self.window_size

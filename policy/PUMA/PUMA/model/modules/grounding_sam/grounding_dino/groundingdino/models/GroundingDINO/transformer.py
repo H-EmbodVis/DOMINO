@@ -37,6 +37,45 @@ from .utils import (
 )
 
 
+def _build_spatial_shapes_tensor(spatial_shapes, like_tensor):
+    if like_tensor.device.type == "npu":
+        values = [
+            like_tensor.new_full((), value, dtype=torch.long)
+            for shape in spatial_shapes
+            for value in shape
+        ]
+        return torch.stack(values).reshape(-1, 2)
+    return torch.as_tensor(
+        spatial_shapes, dtype=torch.long, device=like_tensor.device
+    )
+
+
+def _build_level_start_index(spatial_shapes, spatial_shapes_tensor):
+    if spatial_shapes_tensor.device.type == "npu":
+        level_start_index = []
+        next_level_start = 0
+        for height, width in spatial_shapes:
+            level_start_index.append(next_level_start)
+            next_level_start += height * width
+        return torch.stack(
+            [
+                spatial_shapes_tensor.new_full((), value, dtype=torch.long)
+                for value in level_start_index
+            ]
+        )
+
+    return torch.cat(
+        (
+            spatial_shapes_tensor.new_zeros((1,)),
+            spatial_shapes_tensor.prod(1).cumsum(0)[:-1],
+        )
+    )
+
+
+def _should_check_decoder_finite(output):
+    return output.device.type != "npu"
+
+
 class Transformer(nn.Module):
     def __init__(
         self,
@@ -241,11 +280,15 @@ class Transformer(nn.Module):
         src_flatten = torch.cat(src_flatten, 1)  # bs, \sum{hxw}, c
         mask_flatten = torch.cat(mask_flatten, 1)  # bs, \sum{hxw}
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)  # bs, \sum{hxw}, c
-        spatial_shapes = torch.as_tensor(
-            spatial_shapes, dtype=torch.long, device=src_flatten.device
+        spatial_shapes_python = spatial_shapes
+        spatial_shapes_metadata = (
+            tuple(spatial_shapes_python) if src_flatten.device.type == "npu" else None
         )
-        level_start_index = torch.cat(
-            (spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1])
+        spatial_shapes = _build_spatial_shapes_tensor(
+            spatial_shapes_python, src_flatten
+        )
+        level_start_index = _build_level_start_index(
+            spatial_shapes_python, spatial_shapes
         )
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
 
@@ -260,6 +303,7 @@ class Transformer(nn.Module):
             pos=lvl_pos_embed_flatten,
             level_start_index=level_start_index,
             spatial_shapes=spatial_shapes,
+            spatial_shapes_metadata=spatial_shapes_metadata,
             valid_ratios=valid_ratios,
             key_padding_mask=mask_flatten,
             memory_text=text_dict["encoded_text"],
@@ -283,7 +327,9 @@ class Transformer(nn.Module):
 
         if self.two_stage_type == "standard":
             output_memory, output_proposals = gen_encoder_output_proposals(
-                memory, mask_flatten, spatial_shapes
+                memory,
+                mask_flatten,
+                spatial_shapes_metadata or spatial_shapes,
             )
             output_memory = self.enc_output_norm(self.enc_output(output_memory))
 
@@ -369,6 +415,7 @@ class Transformer(nn.Module):
             refpoints_unsigmoid=refpoint_embed.transpose(0, 1),
             level_start_index=level_start_index,
             spatial_shapes=spatial_shapes,
+            spatial_shapes_metadata=spatial_shapes_metadata,
             valid_ratios=valid_ratios,
             tgt_mask=attn_mask,
             memory_text=text_dict["encoded_text"],
@@ -494,6 +541,7 @@ class TransformerEncoder(nn.Module):
         pos_text: Tensor = None,
         text_self_attention_masks: Tensor = None,
         position_ids: Tensor = None,
+        spatial_shapes_metadata=None,
     ):
         """
         Input:
@@ -521,7 +569,9 @@ class TransformerEncoder(nn.Module):
         # preparation and reshape
         if self.num_layers > 0:
             reference_points = self.get_reference_points(
-                spatial_shapes, valid_ratios, device=src.device
+                spatial_shapes_metadata or spatial_shapes,
+                valid_ratios,
+                device=src.device,
             )
 
         if self.text_layers:
@@ -586,6 +636,7 @@ class TransformerEncoder(nn.Module):
                     spatial_shapes,
                     level_start_index,
                     key_padding_mask,
+                    spatial_shapes_metadata,
                     use_reentrant=False,
                 )
             else:
@@ -596,6 +647,7 @@ class TransformerEncoder(nn.Module):
                     spatial_shapes=spatial_shapes,
                     level_start_index=level_start_index,
                     key_padding_mask=key_padding_mask,
+                    spatial_shapes_metadata=spatial_shapes_metadata,
                 )
 
         return output, memory_text
@@ -653,6 +705,7 @@ class TransformerDecoder(nn.Module):
         # for text
         memory_text: Optional[Tensor] = None,
         text_attention_mask: Optional[Tensor] = None,
+        spatial_shapes_metadata=None,
     ):
         """
         Input:
@@ -703,11 +756,14 @@ class TransformerDecoder(nn.Module):
                 memory_key_padding_mask=memory_key_padding_mask,
                 memory_level_start_index=level_start_index,
                 memory_spatial_shapes=spatial_shapes,
+                memory_spatial_shapes_metadata=spatial_shapes_metadata,
                 memory_pos=pos,
                 self_attn_mask=tgt_mask,
                 cross_attn_mask=memory_mask,
             )
-            if output.isnan().any() | output.isinf().any():
+            if _should_check_decoder_finite(output) and (
+                output.isnan().any() | output.isinf().any()
+            ):
                 print(f"output layer_id {layer_id} is nan")
                 try:
                     num_nan = output.isnan().sum().item()
@@ -784,7 +840,14 @@ class DeformableTransformerEncoderLayer(nn.Module):
         return src
 
     def forward(
-        self, src, pos, reference_points, spatial_shapes, level_start_index, key_padding_mask=None
+        self,
+        src,
+        pos,
+        reference_points,
+        spatial_shapes,
+        level_start_index,
+        key_padding_mask=None,
+        spatial_shapes_metadata=None,
     ):
         # self attention
         # import ipdb; ipdb.set_trace()
@@ -795,6 +858,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
             spatial_shapes=spatial_shapes,
             level_start_index=level_start_index,
             key_padding_mask=key_padding_mask,
+            spatial_shapes_metadata=spatial_shapes_metadata,
         )
         src = src + self.dropout1(src2)
         src = self.norm1(src)
@@ -886,6 +950,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         memory_key_padding_mask: Optional[Tensor] = None,
         memory_level_start_index: Optional[Tensor] = None,  # num_levels
         memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
+        memory_spatial_shapes_metadata=None,
         memory_pos: Optional[Tensor] = None,  # pos for memory
         # sa
         self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
@@ -923,6 +988,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
             spatial_shapes=memory_spatial_shapes,
             level_start_index=memory_level_start_index,
             key_padding_mask=memory_key_padding_mask,
+            spatial_shapes_metadata=memory_spatial_shapes_metadata,
         ).transpose(0, 1)
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)

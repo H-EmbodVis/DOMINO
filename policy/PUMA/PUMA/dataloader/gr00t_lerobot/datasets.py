@@ -98,6 +98,123 @@ def _as_bool(value, default=False) -> bool:
     return bool(value)
 
 
+def _path_from_cfg_or_env(cfg, cfg_key: str, env_key: str) -> Optional[Path]:
+    raw = _cfg_get(cfg, cfg_key, None)
+    if raw is None or str(raw).strip() == "":
+        raw = os.environ.get(env_key, "")
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve(strict=False)
+
+
+def _dataset_cache_subdir(cache_root: Path, dataset_path: Path, dataset_name: str) -> Path:
+    resolved = str(dataset_path.expanduser().resolve(strict=False))
+    digest = hashlib.sha1(resolved.encode("utf-8")).hexdigest()[:12]
+    return cache_root / dataset_name / digest
+
+
+def _resolve_lerobot_stats_paths(
+    dataset_path: Path,
+    dataset_name: str,
+    data_cfg,
+) -> tuple[list[Path], Path]:
+    source_stats_path = dataset_path / LE_ROBOT_STATS_FILENAME
+    stats_cache_root = _path_from_cfg_or_env(
+        data_cfg,
+        "stats_cache_dir",
+        "PUMA_DATASET_STATS_CACHE_DIR",
+    )
+    if stats_cache_root is None:
+        return [source_stats_path], source_stats_path
+
+    cached_stats_path = (
+        _dataset_cache_subdir(stats_cache_root, dataset_path, dataset_name)
+        / LE_ROBOT_STATS_FILENAME
+    )
+    return [source_stats_path, cached_stats_path], cached_stats_path
+
+
+def _load_lerobot_statistics(stats_paths: Sequence[Path]) -> Optional[dict]:
+    for stats_path in stats_paths:
+        if not stats_path.exists():
+            continue
+        try:
+            with open(stats_path, "r") as f:
+                le_statistics = json.load(f)
+            for stat in le_statistics.values():
+                DatasetStatisticalValues.model_validate(stat)
+            return le_statistics
+        except Exception as e:
+            print(
+                f"[RANK {os.environ.get('RANK', 'NA')}] "
+                f"Failed to load dataset statistics from {stats_path} ({e}), rebuilding..."
+            )
+    return None
+
+
+def _resolve_lerobot_steps_paths(
+    dataset_path: Path,
+    dataset_name: str,
+    data_cfg,
+    steps_filename: str,
+) -> tuple[list[Path], Path]:
+    source_steps_path = dataset_path / "meta" / steps_filename
+    steps_cache_root = _path_from_cfg_or_env(
+        data_cfg,
+        "steps_cache_dir",
+        "PUMA_STEPS_CACHE_DIR",
+    )
+    if steps_cache_root is None:
+        return [source_steps_path], source_steps_path
+
+    cached_steps_path = (
+        _dataset_cache_subdir(steps_cache_root, dataset_path, dataset_name)
+        / "meta"
+        / steps_filename
+    )
+    return [source_steps_path, cached_steps_path], cached_steps_path
+
+
+def _load_lerobot_steps_cache(steps_paths: Sequence[Path], config_key: str) -> Optional[dict]:
+    for steps_path in steps_paths:
+        if not steps_path.exists():
+            continue
+        try:
+            with open(steps_path, "rb") as f:
+                cached_data = pickle.load(f)
+            cached_key = cached_data.get("config_key", None)
+            if cached_key == config_key:
+                return cached_data
+            print(
+                f"[RANK {os.environ.get('RANK', 'NA')}] "
+                f"steps cache config mismatch at {steps_path}, rebuilding."
+            )
+        except Exception as e:
+            print(
+                f"[RANK {os.environ.get('RANK', 'NA')}] "
+                f"Failed to load cached steps from {steps_path} ({e}), will rebuild."
+            )
+    return None
+
+
+def _resolve_history_flow_cache_paths(
+    dataset_path: Path,
+    dataset_name: str,
+    cache_cfg,
+) -> tuple[list[Path], Path]:
+    source_cache_root = dataset_path
+    explicit_root = _path_from_cfg_or_env(
+        cache_cfg,
+        "root_dir",
+        "PUMA_HISTORY_FLOW_CACHE_DIR",
+    )
+    if explicit_root is None:
+        return [source_cache_root], source_cache_root
+    cached_cache_root = _dataset_cache_subdir(explicit_root, dataset_path, dataset_name)
+    return [source_cache_root, cached_cache_root], cached_cache_root
+
+
 def calculate_dataset_statistics(parquet_paths: list[Path]) -> dict:
     """Calculate the dataset statistics of all columns for a list of parquet files."""
     # Dataset statistics
@@ -417,24 +534,14 @@ class LeRobotSingleDataset(Dataset):
         def is_main():
             return (not dist.is_initialized()) or dist.get_rank() == 0
         
-        stats_path = self.dataset_path / LE_ROBOT_STATS_FILENAME
-        tmp_path = stats_path.with_suffix(".tmp")
+        stats_read_paths, stats_write_path = _resolve_lerobot_stats_paths(
+            self.dataset_path,
+            self.dataset_name,
+            self.data_cfg,
+        )
         
         # ---------- all rank try to read  ----------
-        if stats_path.exists():
-            try:
-                with open(stats_path, "r") as f:
-                    le_statistics = json.load(f)
-                for stat in le_statistics.values():
-                    DatasetStatisticalValues.model_validate(stat)
-            except Exception as e:
-                print(
-                    f"[RANK {os.environ.get('RANK', 'NA')}] "
-                    f"Failed to load dataset statistics ({e}), rebuilding..."
-                )
-                le_statistics = None
-        else:
-            le_statistics = None
+        le_statistics = _load_lerobot_statistics(stats_read_paths)
         
         # ---------- rank0 build ----------
         if le_statistics is None and is_main():
@@ -447,12 +554,13 @@ class LeRobotSingleDataset(Dataset):
         
             le_statistics = calculate_dataset_statistics(parquet_files_filtered)
         
-            stats_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = stats_write_path.with_suffix(".tmp")
+            stats_write_path.parent.mkdir(parents=True, exist_ok=True)
             with open(tmp_path, "w") as f:
                 json.dump(le_statistics, f, indent=4)
-            os.replace(tmp_path, stats_path)
+            os.replace(tmp_path, stats_write_path)
         
-            print(f"[RANK 0] Dataset statistics cached to {stats_path}")
+            print(f"[RANK 0] Dataset statistics cached to {stats_write_path}")
         
         # ---------- sync ----------
         if dist.is_initialized():
@@ -460,8 +568,12 @@ class LeRobotSingleDataset(Dataset):
         
         # ---------- all rank read again ----------
         if le_statistics is None:
-            with open(stats_path, "r") as f:
-                le_statistics = json.load(f)
+            le_statistics = _load_lerobot_statistics(stats_read_paths)
+            if le_statistics is None:
+                raise FileNotFoundError(
+                    "Dataset statistics were not available after rank0 build. "
+                    f"Tried: {[str(path) for path in stats_read_paths]}"
+                )
 
         dataset_statistics = {}
         for our_modality in ["state", "action"]:
@@ -540,26 +652,17 @@ class LeRobotSingleDataset(Dataset):
     
         config_key = self._get_steps_config_key()
         steps_filename = "steps_data_index.pkl"
-        steps_path = self.dataset_path / "meta" / steps_filename
+        steps_read_paths, steps_write_path = _resolve_lerobot_steps_paths(
+            self.dataset_path,
+            self.dataset_name,
+            self.data_cfg,
+            steps_filename,
+        )
     
         # ---------- try to read from cache  ----------
-        if steps_path.exists():
-            try:
-                with open(steps_path, "rb") as f:
-                    cached_data = pickle.load(f)
-                cached_key = cached_data.get("config_key", None)
-                if cached_key == config_key:
-                    return cached_data["steps"]
-                print(
-                    f"[RANK {os.environ.get('RANK', 'NA')}] "
-                    "steps cache config mismatch, rebuilding."
-                )
-            except Exception as e:
-                # include EOFError / PickleError / KeyError
-                print(
-                    f"[RANK {os.environ.get('RANK', 'NA')}] "
-                    f"Failed to load cached steps ({e}), will rebuild."
-                )
+        cached_data = _load_lerobot_steps_cache(steps_read_paths, config_key)
+        if cached_data is not None:
+            return cached_data["steps"]
     
         # ---------- only build by rank0  ----------
         if is_main():
@@ -574,22 +677,26 @@ class LeRobotSingleDataset(Dataset):
                 "delete_pause_frame": self.delete_pause_frame,
             }
     
-            steps_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = steps_path.with_suffix(".tmp")
+            steps_write_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = steps_write_path.with_suffix(".tmp")
     
             with open(tmp_path, "wb") as f:
                 pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
-            os.replace(tmp_path, steps_path)
+            os.replace(tmp_path, steps_write_path)
     
-            print(f"[RANK 0] Cached steps saved to {steps_path}")
+            print(f"[RANK 0] Cached steps saved to {steps_write_path}")
     
         # ---------- sync after rank0  ----------
         if dist.is_initialized():
             dist.barrier()
     
         # ---------- read by all rank ----------
-        with open(steps_path, "rb") as f:
-            cached_data = pickle.load(f)
+        cached_data = _load_lerobot_steps_cache(steps_read_paths, config_key)
+        if cached_data is None:
+            raise FileNotFoundError(
+                "Steps cache was not available after rank0 build. "
+                f"Tried: {[str(path) for path in steps_read_paths]}"
+            )
     
         return cached_data["steps"]
 
@@ -2094,17 +2201,21 @@ class LeRobotMixtureDataset(Dataset):
         cache_enabled: bool,
         cache_read: bool,
         cache_write: bool,
-        cache_root: Path,
+        cache_read_roots: Sequence[Path],
+        cache_write_root: Path,
         cache_dirname: str,
         cache_key: str,
     ) -> np.ndarray:
-        cache_path = None
         if cache_enabled:
-            cache_path = build_flow_cache_path(cache_root, cache_dirname, cache_key)
             if cache_read:
-                cached_flow = load_flow_cache(cache_path)
-                if cached_flow is not None:
-                    return cached_flow
+                for cache_root in cache_read_roots:
+                    cache_path = build_flow_cache_path(cache_root, cache_dirname, cache_key)
+                    cached_flow = load_flow_cache(cache_path)
+                    if cached_flow is not None:
+                        return cached_flow
+            cache_write_path = build_flow_cache_path(cache_write_root, cache_dirname, cache_key)
+        else:
+            cache_write_path = None
 
         flow_rgb = compute_flow_rgb_farneback(
             prev_rgb=prev_frame,
@@ -2113,8 +2224,8 @@ class LeRobotMixtureDataset(Dataset):
             farneback_cfg=farneback_cfg,
         )
 
-        if cache_enabled and cache_write and cache_path is not None:
-            save_flow_cache(cache_path, flow_rgb)
+        if cache_enabled and cache_write and cache_write_path is not None:
+            save_flow_cache(cache_write_path, flow_rgb)
         return flow_rgb
 
     def _build_history_flow_images(
@@ -2150,7 +2261,11 @@ class LeRobotMixtureDataset(Dataset):
         cache_write = _as_bool(_cfg_get(cache_cfg, "write", True), True)
         cache_dirname = str(_cfg_get(cache_cfg, "dirname", "history_flow_cache"))
         cache_version = str(_cfg_get(cache_cfg, "version", "v1"))
-        cache_root = dataset.dataset_path
+        cache_read_roots, cache_write_root = _resolve_history_flow_cache_paths(
+            dataset.dataset_path,
+            dataset.dataset_name,
+            cache_cfg,
+        )
 
         history_images = []
         for i in range(len(frames) - 1):
@@ -2175,7 +2290,8 @@ class LeRobotMixtureDataset(Dataset):
                 cache_enabled=cache_enabled,
                 cache_read=cache_read,
                 cache_write=cache_write,
-                cache_root=cache_root,
+                cache_read_roots=cache_read_roots,
+                cache_write_root=cache_write_root,
                 cache_dirname=cache_dirname,
                 cache_key=cache_key,
             )
@@ -2835,5 +2951,3 @@ class LeRobotMixtureDataset(Dataset):
                 dataset.set_transforms_metadata(self.merged_metadata[dataset.tag])
         
         print(f"Applied cached statistics for {len(self.merged_metadata)} embodiment tags.")
-
-

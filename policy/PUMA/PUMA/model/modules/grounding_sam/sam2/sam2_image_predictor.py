@@ -17,6 +17,16 @@ from sam2.modeling.sam2_base import SAM2Base
 from sam2.utils.transforms import SAM2Transforms
 
 
+def _make_box_prompt_labels(boxes: torch.Tensor) -> torch.Tensor:
+    if boxes.device.type == "npu":
+        return torch.arange(2, 4, dtype=torch.int, device=boxes.device).reshape(
+            1, 2
+        ).expand(boxes.size(0), -1)
+    return torch.tensor([[2, 3]], dtype=torch.int, device=boxes.device).repeat(
+        boxes.size(0), 1
+    )
+
+
 class SAM2ImagePredictor:
     def __init__(
         self,
@@ -392,8 +402,7 @@ class SAM2ImagePredictor:
         # Embed prompts
         if boxes is not None:
             box_coords = boxes.reshape(-1, 2, 2)
-            box_labels = torch.tensor([[2, 3]], dtype=torch.int, device=boxes.device)
-            box_labels = box_labels.repeat(boxes.size(0), 1)
+            box_labels = _make_box_prompt_labels(boxes)
             # we merge "boxes" and "points" into a single "concat_points" input (where
             # boxes are added at the beginning) to sam_prompt_encoder
             if concat_points is not None:

@@ -13,12 +13,13 @@ from typing import Any, List, Optional, Tuple
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from PIL import Image
 
 from PUMA.training.trainer_utils import initialize_overwatch
 from PUMA.model.tools import FRAMEWORK_REGISTRY
-from PUMA.util.device import get_autocast_context
+from PUMA.util.device import get_autocast_context, normalize_device_type
 from deployment.model_server.tools.image_tools import to_pil_preserve
 
 logger = initialize_overwatch(__name__)
@@ -158,18 +159,21 @@ class PUMA(baseframework):
 
         qwen_inputs = self.qwen_vl_interface.build_qwenvl_inputs(images=batch_images, instructions=instructions)
 
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with get_autocast_context(qwen_inputs["input_ids"].device, dtype=torch.bfloat16):
             qwenvl_outputs = self.qwen_vl_interface(
                 **qwen_inputs,
                 output_attentions=False,
                 output_hidden_states=True,
                 return_dict=True,
+                logits_to_keep=1,
             )
             last_hidden = qwenvl_outputs.hidden_states[-1]
 
-        with torch.autocast("cuda", dtype=torch.float32):
+        with get_autocast_context(last_hidden.device, dtype=torch.float32):
             input_ids = qwen_inputs.get("input_ids", None)
             action_queries = self._gather_action_token_embeddings(last_hidden, input_ids, action_token_id=self.action_token_id)
+            if getattr(self, "_keep_action_model_fp32_during_casts", False):
+                action_queries = action_queries.float()
             pred_actions = self.action_model.predict_action(action_queries)
 
             actions = torch.tensor(
@@ -329,7 +333,18 @@ class PUMA(baseframework):
 
     def configure_action_model_precision(self):
         """Keep the numerically sensitive action head in FP32."""
+        self._keep_action_model_fp32_during_casts = True
         self.action_model.to(dtype=torch.float32)
+        return self
+
+    def enable_action_model_fp32_training(self):
+        """Preserve FP32 action parameters when Ascend DeepSpeed casts the model."""
+        return self.configure_action_model_precision()
+
+    def bfloat16(self):
+        super().bfloat16()
+        if getattr(self, "_keep_action_model_fp32_during_casts", False):
+            self.configure_action_model_precision()
         return self
 
     def _gather_action_token_embeddings(
@@ -376,5 +391,10 @@ class PUMA(baseframework):
         masked_pos = torch.where(mask, idx, torch.full_like(idx, -1))
         topk_pos = masked_pos.topk(k=num_tokens, dim=-1).values
         selected_pos = topk_pos.sort(dim=-1).values
+        if normalize_device_type(last_hidden.device) == "npu":
+            # gather's backward is fragile on Ascend; a dense one-hot selector
+            # with bmm produces the same values with a stable backward.
+            selector = F.one_hot(selected_pos, num_classes=L).to(dtype=last_hidden.dtype)
+            return torch.bmm(selector, last_hidden)
         expanded_index = selected_pos.unsqueeze(-1).expand(-1, -1, H)
         return last_hidden.gather(dim=1, index=expanded_index)

@@ -49,6 +49,17 @@ class DINOv2BackBone(nn.Module):
         weights_path = os.path.expanduser(f"{TORCH_HOME}/hub/checkpoints/{backone_name}_pretrain.pth")
         code_path = os.path.expanduser(f"{TORCH_HOME}/hub/facebookresearch_dinov2_main")
         use_local = os.path.isfile(weights_path) and os.path.isdir(code_path)
+        require_local = os.environ.get("PUMA_REQUIRE_LOCAL_DINO") == "1"
+
+        if require_local and not use_local:
+            missing = []
+            if not os.path.isdir(code_path):
+                missing.append(f"DINO code directory {code_path}")
+            if not os.path.isfile(weights_path):
+                missing.append(f"DINO checkpoint {weights_path}")
+            raise FileNotFoundError(
+                "local DINO loading is required but missing " + ", ".join(missing)
+            )
 
         if use_local:
             self.body = torch.hub.load(code_path, backone_name, source="local", pretrained=False)

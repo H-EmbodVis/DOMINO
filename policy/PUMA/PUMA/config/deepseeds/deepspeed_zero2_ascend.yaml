@@ -1,0 +1,13 @@
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: DEEPSPEED
+num_machines: 1
+num_processes: 8
+machine_rank: 0
+main_training_function: main
+rdzv_backend: static
+same_network: true
+use_cpu: false
+deepspeed_config:
+  deepspeed_config_file: "./PUMA/config/deepseeds/ds_config_ascend_zero2.json"
+  deepspeed_multinode_launcher: standard

@@ -107,6 +107,11 @@ class WorldFeatureSupervisor(nn.Module):
         self.cache_read = bool(cache_cfg.get("read", True))
         self.cache_write = bool(cache_cfg.get("write", True))
         self.cache_dirname = cache_cfg.get("dirname", grounding_cfg.get("cache_dirname", "grounding_cache"))
+        self.cache_root_dir = self._path_from_cfg_or_env(
+            cache_cfg,
+            "root_dir",
+            "PUMA_GROUNDING_CACHE_DIR",
+        )
         self.cache_signature = self._build_cache_signature(grounding_cfg, grounding_mode, cache_cfg)
         self._usage_reported = {"cache": False, "online": False}
 
@@ -156,6 +161,48 @@ class WorldFeatureSupervisor(nn.Module):
         if not cache_root:
             return None
         return Path(cache_root)
+
+    @staticmethod
+    def _path_from_cfg_or_env(cfg: Optional[dict], cfg_key: str, env_key: str) -> Optional[Path]:
+        raw = None
+        if isinstance(cfg, dict):
+            raw = cfg.get(cfg_key)
+        if raw is None or str(raw).strip() == "":
+            raw = os.environ.get(env_key, "")
+        raw = str(raw).strip()
+        if not raw:
+            return None
+        return Path(raw).expanduser().resolve(strict=False)
+
+    @staticmethod
+    def _dataset_cache_subdir(cache_root: Path, dataset_path: Path, dataset_name: str) -> Path:
+        resolved = str(dataset_path.expanduser().resolve(strict=False))
+        digest = hashlib.sha1(resolved.encode("utf-8")).hexdigest()[:12]
+        return cache_root / dataset_name / digest
+
+    def _resolve_cache_roots(
+        self,
+        cache_info: Optional[dict],
+    ) -> Tuple[List[Path], Optional[Path]]:
+        if not isinstance(cache_info, dict):
+            return [], None
+
+        source_cache_root = self._normalize_cache_root(
+            cache_info.get("dataset_path") or cache_info.get("cache_root")
+        )
+        if source_cache_root is None:
+            return [], None
+
+        dataset_name = str(cache_info.get("dataset_name") or source_cache_root.name)
+        if self.cache_root_dir is None:
+            return [source_cache_root], source_cache_root
+
+        run_cache_root = self._dataset_cache_subdir(
+            self.cache_root_dir,
+            source_cache_root,
+            dataset_name,
+        )
+        return [source_cache_root, run_cache_root], run_cache_root
 
     def _make_cache_path(self, cache_root: Path, frame_key: str, prompt: str) -> Path:
         cache_id = self._hash_text(f"{self.cache_signature}|{frame_key}|{prompt}")
@@ -212,23 +259,27 @@ class WorldFeatureSupervisor(nn.Module):
         self,
         frame: Image.Image,
         prompt: str,
-        cache_root: Optional[Path],
+        cache_read_roots: Sequence[Path],
+        cache_write_root: Optional[Path],
         frame_key: Optional[str],
     ) -> Union[torch.Tensor, np.ndarray]:
-        if not self.cache_enabled or cache_root is None or not frame_key:
+        if not self.cache_enabled or not frame_key or (not cache_read_roots and cache_write_root is None):
             self._report_usage("online", "cache disabled or missing key")
             return self.image_grounder.predict_mask_and_box(frame, prompt)[0]
 
-        cache_path = self._make_cache_path(cache_root, frame_key, prompt)
-        if self.cache_read and cache_path.exists():
-            cached = self._load_cache(cache_path)
-            if cached is not None:
-                self._report_usage("cache", "cache hit")
-                return cached[0]
+        if self.cache_read:
+            for cache_root in cache_read_roots:
+                cache_path = self._make_cache_path(cache_root, frame_key, prompt)
+                if cache_path.exists():
+                    cached = self._load_cache(cache_path)
+                    if cached is not None:
+                        self._report_usage("cache", "cache hit")
+                        return cached[0]
 
         self._report_usage("online", "cache miss")
         mask, box = self.image_grounder.predict_mask_and_box(frame, prompt)
-        if self.cache_write:
+        if self.cache_write and cache_write_root is not None:
+            cache_path = self._make_cache_path(cache_write_root, frame_key, prompt)
             self._save_cache(cache_path, mask, box)
         return mask
 
@@ -236,10 +287,11 @@ class WorldFeatureSupervisor(nn.Module):
         self,
         frames: Sequence[Image.Image],
         prompt: str,
-        cache_root: Optional[Path],
+        cache_read_roots: Sequence[Path],
+        cache_write_root: Optional[Path],
         frame_keys: Sequence[Optional[str]],
     ) -> List[Union[torch.Tensor, np.ndarray]]:
-        if not self.cache_enabled or cache_root is None or not frame_keys:
+        if not self.cache_enabled or not frame_keys or (not cache_read_roots and cache_write_root is None):
             self._report_usage("online", "cache disabled or missing key")
             return self.video_grounder.predict_video_masks(frames, prompt)
 
@@ -250,13 +302,19 @@ class WorldFeatureSupervisor(nn.Module):
                 masks_out.append(None)
                 missing.append(idx)
                 continue
-            cache_path = self._make_cache_path(cache_root, frame_key, prompt)
-            if self.cache_read and cache_path.exists():
-                cached = self._load_cache(cache_path)
-                if cached is not None:
-                    self._report_usage("cache", "cache hit")
-                    masks_out.append(cached[0])
-                    continue
+            cache_hit = False
+            if self.cache_read:
+                for cache_root in cache_read_roots:
+                    cache_path = self._make_cache_path(cache_root, frame_key, prompt)
+                    if cache_path.exists():
+                        cached = self._load_cache(cache_path)
+                        if cached is not None:
+                            self._report_usage("cache", "cache hit")
+                            masks_out.append(cached[0])
+                            cache_hit = True
+                            break
+            if cache_hit:
+                continue
             masks_out.append(None)
             missing.append(idx)
 
@@ -267,8 +325,8 @@ class WorldFeatureSupervisor(nn.Module):
                 mask = computed[idx]
                 masks_out[idx] = mask
                 frame_key = frame_keys[idx]
-                if self.cache_write and frame_key:
-                    cache_path = self._make_cache_path(cache_root, frame_key, prompt)
+                if self.cache_write and cache_write_root is not None and frame_key:
+                    cache_path = self._make_cache_path(cache_write_root, frame_key, prompt)
                     self._save_cache(cache_path, mask, None)
 
         if any(mask is None for mask in masks_out):
@@ -285,21 +343,20 @@ class WorldFeatureSupervisor(nn.Module):
         self,
         future_images: Sequence[Sequence[Sequence[Image.Image]]],
         cache_infos: Optional[Sequence[dict]] = None,
-    ) -> Tuple[List[List[Image.Image]], List[List[Optional[str]]], List[Optional[Path]]]:
+    ) -> Tuple[List[List[Image.Image]], List[List[Optional[str]]], List[Tuple[List[Path], Optional[Path]]]]:
         selected_frames: List[List[Image.Image]] = []
         selected_keys: List[List[Optional[str]]] = []
-        cache_roots: List[Optional[Path]] = []
+        cache_paths: List[Tuple[List[Path], Optional[Path]]] = []
         for sample_idx, sample in enumerate(future_images):
             frames: List[Image.Image] = []
             keys: List[Optional[str]] = []
             sample_keys = None
-            cache_root = None
+            cache_read_roots: List[Path] = []
+            cache_write_root = None
             if cache_infos is not None and sample_idx < len(cache_infos):
                 cache_info = cache_infos[sample_idx]
                 if isinstance(cache_info, dict):
-                    cache_root = self._normalize_cache_root(
-                        cache_info.get("dataset_path") or cache_info.get("cache_root")
-                    )
+                    cache_read_roots, cache_write_root = self._resolve_cache_roots(cache_info)
                     sample_keys = cache_info.get("future_frame_keys")
 
             for step_idx, step in enumerate(sample):
@@ -322,9 +379,9 @@ class WorldFeatureSupervisor(nn.Module):
 
             selected_frames.append(frames)
             selected_keys.append(keys)
-            cache_roots.append(cache_root)
+            cache_paths.append((cache_read_roots, cache_write_root))
 
-        return selected_frames, selected_keys, cache_roots
+        return selected_frames, selected_keys, cache_paths
 
     @torch.no_grad()
     def compute_target_features(
@@ -335,7 +392,7 @@ class WorldFeatureSupervisor(nn.Module):
     ) -> torch.Tensor:
         if len(future_images) == 0:
             raise ValueError("future_images is empty")
-        frames_per_sample, frame_keys_per_sample, cache_roots = self._select_future_frames(
+        frames_per_sample, frame_keys_per_sample, cache_paths = self._select_future_frames(
             future_images, cache_infos
         )
         if len(frames_per_sample) != len(text_prompts):
@@ -345,19 +402,28 @@ class WorldFeatureSupervisor(nn.Module):
         for idx, (frames, prompt) in enumerate(zip(frames_per_sample, text_prompts)):
             prompt_text = (prompt or "").strip()
             frame_keys = frame_keys_per_sample[idx] if idx < len(frame_keys_per_sample) else []
-            cache_root = cache_roots[idx] if idx < len(cache_roots) else None
+            cache_read_roots, cache_write_root = (
+                cache_paths[idx] if idx < len(cache_paths) else ([], None)
+            )
             if len(frame_keys) < len(frames):
                 frame_keys = list(frame_keys) + [None] * (len(frames) - len(frame_keys))
             if self.grounding_mode == "video" and self.video_grounder is not None:
                 masks = self._get_video_masks_with_cache(
                     frames=frames,
                     prompt=prompt_text,
-                    cache_root=cache_root,
+                    cache_read_roots=cache_read_roots,
+                    cache_write_root=cache_write_root,
                     frame_keys=frame_keys,
                 )
             else:
                 masks = [
-                    self._get_mask_with_cache(frame, prompt_text, cache_root, frame_key)
+                    self._get_mask_with_cache(
+                        frame,
+                        prompt_text,
+                        cache_read_roots,
+                        cache_write_root,
+                        frame_key,
+                    )
                     for frame, frame_key in zip(frames, frame_keys)
                 ]
             all_masks.extend(masks)
@@ -407,7 +473,7 @@ class WorldFeatureSupervisor(nn.Module):
     ) -> dict:
         if len(future_images) == 0:
             raise ValueError("future_images is empty")
-        frames_per_sample, frame_keys_per_sample, cache_roots = self._select_future_frames(
+        frames_per_sample, frame_keys_per_sample, cache_paths = self._select_future_frames(
             future_images, cache_infos
         )
         if len(frames_per_sample) != len(text_prompts):
@@ -417,7 +483,9 @@ class WorldFeatureSupervisor(nn.Module):
         for idx, (frames, prompt) in enumerate(zip(frames_per_sample, text_prompts)):
             prompt_text = (prompt or "").strip()
             frame_keys = frame_keys_per_sample[idx] if idx < len(frame_keys_per_sample) else []
-            cache_root = cache_roots[idx] if idx < len(cache_roots) else None
+            cache_read_roots, cache_write_root = (
+                cache_paths[idx] if idx < len(cache_paths) else ([], None)
+            )
             if len(frame_keys) < len(frames):
                 frame_keys = list(frame_keys) + [None] * (len(frames) - len(frame_keys))
 
@@ -425,18 +493,28 @@ class WorldFeatureSupervisor(nn.Module):
             if self.grounding_mode == "video" and self.video_grounder is not None:
                 missing = []
                 for frame_idx, frame_key in enumerate(frame_keys):
-                    if not self.cache_enabled or cache_root is None or not frame_key:
+                    if not self.cache_enabled or not frame_key or (
+                        not cache_read_roots and cache_write_root is None
+                    ):
                         missing.append(frame_idx)
                         continue
-                    cache_path = self._make_cache_path(cache_root, frame_key, prompt_text)
-                    if self.cache_read and cache_path.exists() and skip_existing:
-                        if validate_existing:
-                            cached = self._load_cache(cache_path)
-                            if cached is not None:
-                                stats["cached"] += 1
+                    if self.cache_read and skip_existing:
+                        cache_hit = False
+                        for cache_root in cache_read_roots:
+                            cache_path = self._make_cache_path(cache_root, frame_key, prompt_text)
+                            if not cache_path.exists():
                                 continue
-                        else:
-                            stats["cached"] += 1
+                            if validate_existing:
+                                cached = self._load_cache(cache_path)
+                                if cached is not None:
+                                    stats["cached"] += 1
+                                    cache_hit = True
+                                    break
+                            else:
+                                stats["cached"] += 1
+                                cache_hit = True
+                                break
+                        if cache_hit:
                             continue
                     missing.append(frame_idx)
 
@@ -444,30 +522,47 @@ class WorldFeatureSupervisor(nn.Module):
                     self._get_video_masks_with_cache(
                         frames=frames,
                         prompt=prompt_text,
-                        cache_root=cache_root,
+                        cache_read_roots=cache_read_roots,
+                        cache_write_root=cache_write_root,
                         frame_keys=frame_keys,
                     )
                     stats["computed"] += len(missing)
                 continue
 
             for frame, frame_key in zip(frames, frame_keys):
-                if not self.cache_enabled or cache_root is None or not frame_key:
+                if not self.cache_enabled or not frame_key or (
+                    not cache_read_roots and cache_write_root is None
+                ):
                     _ = self.image_grounder.predict_mask_and_box(frame, prompt_text)
                     stats["computed"] += 1
                     continue
 
-                cache_path = self._make_cache_path(cache_root, frame_key, prompt_text)
-                if self.cache_read and cache_path.exists() and skip_existing:
-                    if validate_existing:
-                        cached = self._load_cache(cache_path)
-                        if cached is not None:
-                            stats["cached"] += 1
+                if self.cache_read and skip_existing:
+                    cache_hit = False
+                    for cache_root in cache_read_roots:
+                        cache_path = self._make_cache_path(cache_root, frame_key, prompt_text)
+                        if not cache_path.exists():
                             continue
-                    else:
-                        stats["cached"] += 1
+                        if validate_existing:
+                            cached = self._load_cache(cache_path)
+                            if cached is not None:
+                                stats["cached"] += 1
+                                cache_hit = True
+                                break
+                        else:
+                            stats["cached"] += 1
+                            cache_hit = True
+                            break
+                    if cache_hit:
                         continue
 
-                _ = self._get_mask_with_cache(frame, prompt_text, cache_root, frame_key)
+                _ = self._get_mask_with_cache(
+                    frame,
+                    prompt_text,
+                    cache_read_roots,
+                    cache_write_root,
+                    frame_key,
+                )
                 stats["computed"] += 1
 
         return stats

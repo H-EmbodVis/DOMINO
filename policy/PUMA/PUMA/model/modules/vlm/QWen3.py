@@ -14,6 +14,7 @@ from PUMA.model.modules.vlm.ascend import (
     QWEN3_ASCEND_INFERENCE_PLAN_KEY,
     Qwen3AscendInferencePlan,
     configure_qwen3_ascend_inference,
+    linearize_qwen_vision_patch_embed,
     prepare_qwen3_ascend_inference_inputs,
     qwen3_ascend_inference_plan_context,
 )
@@ -85,6 +86,12 @@ class _QWen3_VL_Interface(nn.Module):
                 ),
             )
             logger.info("Installed required Qwen3-VL Ascend inference adapters.")
+        elif bool(qwenvl_config.get("linearize_vision_patch_embed", False)):
+            # Standalone flag (e.g. NPU training): Conv3d with kernel == stride is
+            # unsupported on Ascend, so replace the vision patch embed up front.
+            if not linearize_qwen_vision_patch_embed(model):
+                raise RuntimeError("Qwen3-VL Conv3d patch embedding could not be linearized")
+            logger.info("Linearized Qwen3-VL vision patch embed.")
         processor = AutoProcessor.from_pretrained(model_id, **load_kwargs)
         processor.tokenizer.padding_side = "left"
 
@@ -108,12 +115,30 @@ class _QWen3_VL_Interface(nn.Module):
         Forward pass delegating to underlying Qwen3-VL backbone.
         """
         request_plan = kwargs.pop(QWEN3_ASCEND_INFERENCE_PLAN_KEY, None)
+        skip_lm_head = bool(kwargs.pop("skip_lm_head", False))
 
         with qwen3_ascend_inference_plan_context(request_plan):
             with get_autocast_context(self.model.device, dtype=torch.bfloat16):
-                outputs = self.model(
-                    **kwargs,
-                )
+                if skip_lm_head:
+                    kwargs.pop("labels", None)
+                    kwargs.pop("logits_to_keep", None)
+                    outputs = self.model.model(**kwargs)
+                else:
+                    outputs = self.model(
+                        **kwargs,
+                    )
+
+        if (
+            skip_lm_head
+            and kwargs.get("output_hidden_states")
+            and getattr(outputs, "hidden_states", None) is None
+        ):
+            # The Qwen3-VL base-model wrapper may omit hidden_states even when
+            # output_hidden_states is requested; fall back to last_hidden_state.
+            last_hidden_state = getattr(outputs, "last_hidden_state", None)
+            if not isinstance(last_hidden_state, torch.Tensor):
+                raise RuntimeError("skip_lm_head forward did not return a last hidden state")
+            outputs.hidden_states = (last_hidden_state,)
 
         return outputs
 

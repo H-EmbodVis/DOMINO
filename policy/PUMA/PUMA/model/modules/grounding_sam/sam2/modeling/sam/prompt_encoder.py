@@ -14,6 +14,22 @@ from sam2.modeling.position_encoding import PositionEmbeddingRandom
 from sam2.modeling.sam2_utils import LayerNorm2d
 
 
+def _apply_point_labels_fixed_shape(
+    point_embedding: torch.Tensor,
+    labels: torch.Tensor,
+    not_a_point_weight: torch.Tensor,
+    point_weights: list[torch.Tensor],
+) -> torch.Tensor:
+    """Apply SAM point labels without data-dependent indexing."""
+    label_mask = (labels == -1).unsqueeze(-1)
+    point_embedding = torch.where(label_mask, not_a_point_weight, point_embedding)
+    for label, weight in enumerate(point_weights):
+        point_embedding = point_embedding + (labels == label).unsqueeze(-1).to(
+            point_embedding.dtype
+        ) * weight
+    return point_embedding
+
+
 class PromptEncoder(nn.Module):
     def __init__(
         self,
@@ -92,12 +108,20 @@ class PromptEncoder(nn.Module):
         point_embedding = self.pe_layer.forward_with_coords(
             points, self.input_image_size
         )
-        point_embedding[labels == -1] = 0.0
-        point_embedding[labels == -1] += self.not_a_point_embed.weight
-        point_embedding[labels == 0] += self.point_embeddings[0].weight
-        point_embedding[labels == 1] += self.point_embeddings[1].weight
-        point_embedding[labels == 2] += self.point_embeddings[2].weight
-        point_embedding[labels == 3] += self.point_embeddings[3].weight
+        if point_embedding.device.type == "npu":
+            point_embedding = _apply_point_labels_fixed_shape(
+                point_embedding,
+                labels,
+                self.not_a_point_embed.weight,
+                [embedding.weight for embedding in self.point_embeddings],
+            )
+        else:
+            point_embedding[labels == -1] = 0.0
+            point_embedding[labels == -1] += self.not_a_point_embed.weight
+            point_embedding[labels == 0] += self.point_embeddings[0].weight
+            point_embedding[labels == 1] += self.point_embeddings[1].weight
+            point_embedding[labels == 2] += self.point_embeddings[2].weight
+            point_embedding[labels == 3] += self.point_embeddings[3].weight
         return point_embedding
 
     def _embed_boxes(self, boxes: torch.Tensor) -> torch.Tensor:
