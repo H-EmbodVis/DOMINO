@@ -7,9 +7,8 @@ changes. All Ascend-specific behavior is switched on by a single flag
 (`--device npu`) at serving time; if the environment cannot support it, the
 server fails at startup instead of serving a misconfigured model.
 
-Ascend training code, together with ready-to-use Ascend checkpoints on
-Hugging Face and ModelScope, will be released here shortly. This document
-will grow a training section when that lands.
+Ascend training is available in this repository — see
+[ascend_training.md](ascend_training.md) for the training recipe.
 
 ---
 
@@ -90,11 +89,3 @@ speed, and the cache is reused across restarts.
 Everything on the simulation side stays the same: follow the
 [evaluation steps](../README.md#3-evaluation) in the PUMA README and point
 `deploy_policy.yml` at this server's host and port.
-
-## What's Next
-
-- Ascend training code (launch scripts and training configs), released into
-  this repository.
-- PUMA checkpoints trained on Ascend, published on HuggingFace and
-  ModelScope alongside the existing NVIDIA checkpoints.
-- A training section in this document with the reproduction recipe.

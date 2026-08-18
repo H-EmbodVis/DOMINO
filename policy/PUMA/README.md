@@ -146,6 +146,8 @@ cd policy/PUMA
 bash scripts/run_scripts/run_lerobot_robotwin_puma.sh
 ```
 
+> NPU users: use the Ascend launch scripts and follow **[docs/ascend_training.md](docs/ascend_training.md)** instead of the CUDA script above.
+
 ---
 
 ## 🧪 3. Evaluation
@@ -208,9 +210,9 @@ bash eval.sh adjust_bottle demo_clean_dynamic puma_demo 0 0 9001
 
 ## 🔥 4. Running PUMA on Huawei Ascend NPUs
 
-PUMA runs on Ascend NPUs out of the box: an NVIDIA-trained checkpoint is served as-is — no weight conversion, and the CUDA path stays untouched. Ascend training code and ready-to-use Ascend checkpoints on Hugging Face / ModelScope are coming soon.
+PUMA runs on Ascend NPUs out of the box: an NVIDIA-trained checkpoint is served as-is — no weight conversion, and the CUDA path stays untouched. **Training on Ascend is also supported** — see [docs/ascend_training.md](docs/ascend_training.md).
 
-Quickstart (Atlas 910, CANN 8.5.2):
+Setup (Atlas 910, CANN 8.5.2):
 
 ```bash
 # source your CANN toolkit (path depends on your installation)
@@ -218,6 +220,18 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh
 cd policy/PUMA
 pip install -r requirements-ascend.txt   # pinned torch/torch-npu runtime; no flash-attn
 pip install --no-build-isolation -e .
+```
+
+Training (8-card DeepSpeed ZeRO-2; data preparation is the same as [Section 2](#-2-training)):
+
+```bash
+DATA_ROOT_DIR=/path/to/lerobot_dataset \
+  bash scripts/run_scripts/run_lerobot_robotwin_puma_ascend.sh
+```
+
+Inference (serve an NVIDIA-trained checkpoint directly):
+
+```bash
 pip install -r examples/Robotwin/eval_files/requirements.txt
 
 python deployment/model_server/server_policy.py \
@@ -227,4 +241,4 @@ python deployment/model_server/server_policy.py \
   --use_bf16
 ```
 
-The evaluation flow is identical to [Section 3](#-3-evaluation) — only the policy server side changes. For the full walkthrough (verified environment, installation notes, and what is coming next), see **[docs/ascend_inference.md](docs/ascend_inference.md)**.
+The evaluation flow is identical to [Section 3](#-3-evaluation) — only the policy server side changes. For details, see **[docs/ascend_training.md](docs/ascend_training.md)** and **[docs/ascend_inference.md](docs/ascend_inference.md)**.

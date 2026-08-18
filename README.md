@@ -31,7 +31,9 @@ Vision-Language-Action (VLA) models excel in static manipulation but struggle in
 
 ### 📰 News
 
-**[2026/07/31]** 🚀 PUMA now runs **inference on Huawei Ascend NPUs**: NVIDIA-trained checkpoints work directly on Atlas 910 with no weight conversion — see the [Ascend guide](policy/PUMA/docs/ascend_inference.md). Ascend training code, together with ready-to-use Ascend checkpoints on HuggingFace and ModelScope, will follow shortly.
+**[2026/08/18]** 🚀 PUMA now supports **training on Huawei Ascend NPUs**: NVIDIA weights train as-is with DeepSpeed ZeRO-2, and the CUDA path stays untouched — see the [Ascend training guide](policy/PUMA/docs/ascend_training.md).
+
+**[2026/07/31]** 🚀 PUMA now runs **inference on Huawei Ascend NPUs**: NVIDIA-trained checkpoints work directly on Atlas 910 with no weight conversion — see the [Ascend inference guide](policy/PUMA/docs/ascend_inference.md).
 
 **[2026/06/18]** 🎉 DOMINO has been accepted to **ECCV 2026**!
 
@@ -80,7 +82,7 @@ More visual demos can be found on our [project homepage](https://h-embodvis.gith
 * [x] Support [StarVLA](https://github.com/starVLA/starVLA) codebase (evaluation code available [here](https://github.com/starVLA/starVLA/tree/starVLA_dev/examples/DOMINO))
 * [x] Add real-world evaluation results
 * [x] Support Huawei Ascend NPUs — PUMA inference ([guide](policy/PUMA/docs/ascend_inference.md))
-* [ ] Support Huawei Ascend NPUs — PUMA training code & Ascend checkpoints on HuggingFace/ModelScope (coming soon)
+* [x] Support Huawei Ascend NPUs — PUMA training ([guide](policy/PUMA/docs/ascend_training.md))
 
 
 ## 🛠️ Getting Started
@@ -319,9 +321,19 @@ cd policy/PUMA/examples/Robotwin/eval_files
 bash eval.sh adjust_bottle demo_clean_dynamic puma_demo 0 0
 ```
 
-#### 2.5 Ascend NPU Inference
+#### 2.5 Ascend NPU Training and Inference
 
-NVIDIA-trained PUMA checkpoints can be served directly on Huawei Ascend NPUs — no weight conversion, and the CUDA path is untouched:
+PUMA also runs on Huawei Ascend NPUs — NVIDIA weights are used as-is, with no conversion, and the CUDA path is untouched.
+
+Training (8-card DeepSpeed ZeRO-2):
+
+```bash
+cd policy/PUMA
+DATA_ROOT_DIR=/path/to/lerobot_dataset \
+  bash scripts/run_scripts/run_lerobot_robotwin_puma_ascend.sh
+```
+
+Inference (serve an NVIDIA-trained checkpoint directly):
 
 ```bash
 cd policy/PUMA
@@ -330,7 +342,7 @@ python deployment/model_server/server_policy.py \
   --port 9001 --device npu --use_bf16
 ```
 
-Setup and the verified environment (Atlas 910 / CANN 8.5.2) are documented in the [Ascend guide](policy/PUMA/docs/ascend_inference.md). Ascend training code and Ascend checkpoints on Hugging Face / ModelScope are coming soon.
+See the [Ascend training guide](policy/PUMA/docs/ascend_training.md) and the [Ascend inference guide](policy/PUMA/docs/ascend_inference.md) for setup details.
 
 
 ## 👍 Acknowledgement
